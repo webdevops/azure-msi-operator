@@ -5,7 +5,7 @@ Operator for Azure Managed Service Identity in Kubernetes
 [![Docker](https://img.shields.io/badge/docker-webdevops%2Fazure--msi--operator-blue.svg?longCache=true&style=flat&logo=docker)](https://hub.docker.com/r/webdevops/azure-msi-operator/)
 [![Docker Build Status](https://img.shields.io/docker/build/webdevops/azure-msi-operator.svg)](https://hub.docker.com/r/webdevops/azure-msi-operator/)
 
-Operator for Azure Managed Service Identity (MSI) in Kubernetes, requies [Azure aaa-pod-idenity service](https://github.com/Azure/aad-pod-identity)
+Operator for Azure Managed Service Identity (MSI) in Kubernetes, requies [Azure aad-pod-identity service](https://github.com/Azure/aad-pod-identity)
 Finds and securly creates `AzureIdentity` resources in Kubernetes automatically when found in Azure:
 
 Example Azure MSI:

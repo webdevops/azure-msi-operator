@@ -35,7 +35,8 @@ var opts struct {
 	AzureSubscription []string `long:"azure.subscription" env:"AZURE_SUBSCRIPTION_ID" env-delim:" "  description:"Azure subscription ID"`
 
 	// kubernetes settings
-	KubernetesConfig string `long:"kubeconfig" env:"KUBECONFIG"  description:"Kuberentes config path (should be empty if in-cluster)"`
+	KubernetesConfig      string `long:"kubeconfig" env:"KUBECONFIG"  description:"Kuberentes config path (should be empty if in-cluster)"`
+	KubernetesLabelFormat string `long:"kubernetes.label.format" env:"KUBERNETES_LABEL_FORMAT"  description:"Kubernetes label format (sprintf, if empty, labels are not set)" default:"azure.k8s.io/%s"`
 
 	// Msi settings
 	MsiSchemeGroup          string `long:"msi.scheme.group"           env:"MSI_SCHEME_GROUP"           description:"MSI scheme group name" default:"aadpodidentity.k8s.io"`
@@ -43,7 +44,7 @@ var opts struct {
 	MsiSchemeResource       string `long:"msi.scheme.resource"        env:"MSI_SCHEME_RESOURCE"        description:"MSI scheme resource name (singular)" default:"AzureIdentity"`
 	MsiSchemeResources      string `long:"msi.scheme.resources"       env:"MSI_SCHEME_RESOURCES"       description:"MSI scheme resources name (pural)" default:"azureidentities"`
 	MsiNamespaced           bool   `long:"msi.namespaced"             env:"MSI_NAMESPACED"             description:"Set aadpodidentity.k8s.io/Behavior=namespaced annotation"`
-	MsiTagNamespace         string `long:"msi.tag.namespace"          env:"MSI_TAG_NAMESPACE"          description:"Name of Kubernetes namespace" default:"k8snamespace"`
+	MsiTemplateNamespace    string `long:"msi.template.namespace"     env:"MSI_TEMPLATE_NAMESPACE"     description:"Golang template for Kubernetes namespace" default:"{{index .Tags \"k8snamespace\"}}"`
 	MsiTemplateResourceName string `long:"msi.template.resourcename"  env:"MSI_TEMPLATE_RESOURCENAME"  description:"Golang template for Kubernetes resource name" default:"{{ .Name }}-{{ .ClientId }}"`
 
 	// server settings

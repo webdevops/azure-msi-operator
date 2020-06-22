@@ -45,6 +45,7 @@ type (
 
 		msi struct {
 			resourceNameTemplate *template.Template
+			namespaceTemplate *template.Template
 		}
 	}
 )
@@ -54,11 +55,17 @@ func (m *MsiOperator) Init() {
 	m.initKubernetes()
 	m.initPrometheus()
 
-	t, err := template.New("msiResourceName").Parse(opts.MsiTemplateResourceName)
-	if err != nil {
+	if t, err := template.New("msiResourceName").Parse(opts.MsiTemplateResourceName); err == nil {
+		m.msi.resourceNameTemplate = t
+	} else {
 		panic(err)
 	}
-	m.msi.resourceNameTemplate = t
+
+	if t, err := template.New("msiNamespace").Parse(opts.MsiTemplateNamespace); err == nil {
+		m.msi.namespaceTemplate = t
+	} else {
+		panic(err)
+	}
 }
 
 func (m *MsiOperator) initAzure() {
@@ -297,8 +304,12 @@ func (m *MsiOperator) generateMsiKubernetesResourceInfo(msi *msi.Identity) (name
 		resourceName = &val
 	}
 
-	if val, exists := msi.Tags[opts.MsiTagNamespace]; exists {
-		namespaceName = val
+	namespaceBuf := &bytes.Buffer{}
+	if err := m.msi.namespaceTemplate.Execute(namespaceBuf, templateData); err != nil {
+		panic(err)
+	}
+	if val := namespaceBuf.String(); val != "" {
+		namespaceName = &val
 	}
 
 	return
@@ -347,17 +358,23 @@ func (m *MsiOperator) applyMsiToK8sObject(msi *msi.Identity, k8sResource *unstru
 	}
 
 	// labels
-	if err := unstructured.SetNestedField(k8sResource.Object, resourceInfo.SubscriptionID, "metadata", "labels", "azure.k8s.io/subscription"); err != nil {
-		return fmt.Errorf("failed to set metadata.labels[azure.k8s.io/subscription] value: %v", err)
+	if opts.KubernetesLabelFormat != "" {
+		labelName := fmt.Sprintf(opts.KubernetesLabelFormat, "subscription")
+		if err := unstructured.SetNestedField(k8sResource.Object, resourceInfo.SubscriptionID, "metadata", "labels", labelName); err != nil {
+			return fmt.Errorf("failed to set metadata.labels[%v] value: %v", labelName, err)
+		}
+
+		labelName = fmt.Sprintf(opts.KubernetesLabelFormat, "resourceGroup")
+		if err := unstructured.SetNestedField(k8sResource.Object, resourceInfo.ResourceGroup, "metadata", "labels", labelName); err != nil {
+			return fmt.Errorf("failed to set metadata.labels[%v] value: %v", labelName, err)
+		}
+
+		labelName = fmt.Sprintf(opts.KubernetesLabelFormat, "resourceName")
+		if err := unstructured.SetNestedField(k8sResource.Object, resourceInfo.ResourceName, "metadata", "labels", labelName); err != nil {
+			return fmt.Errorf("failed to set metadata.labels[%v] value: %v", labelName, err)
+		}
 	}
 
-	if err := unstructured.SetNestedField(k8sResource.Object, resourceInfo.ResourceGroup, "metadata", "labels", "azure.k8s.io/resourceGroup"); err != nil {
-		return fmt.Errorf("failed to set metadata.labels[azure.k8s.io/resourceGroup] value: %v", err)
-	}
-
-	if err := unstructured.SetNestedField(k8sResource.Object, resourceInfo.ResourceName, "metadata", "labels", "azure.k8s.io/resourceName"); err != nil {
-		return fmt.Errorf("failed to set metadata.labels[azure.k8s.io/resourceName] value: %v", err)
-	}
 
 	return nil
 }

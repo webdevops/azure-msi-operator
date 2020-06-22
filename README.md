@@ -11,6 +11,8 @@ Finds and securly creates `AzureIdentity` resources in Kubernetes automatically 
 Example Azure MSI:
 ```yaml
 ResourceName: foobar
+ResourceGroup: barfoo
+Subscription: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ClientID: df398181-f42f-41b4-b791-b1d4572be315
 
 ```
@@ -23,7 +25,7 @@ metadata:
   name: foobar-df398181-f42f-41b4-b791-b1d4572be315
 spec:
   type: 0
-  resourceID: /subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourcegroups/resourcegroup-name/providers/Microsoft.ManagedIdentity/userAssignedIdentities/foobar
+  resourceID: /subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourcegroups/barfoo/providers/Microsoft.ManagedIdentity/userAssignedIdentities/foobar
   clientID: df398181-f42f-41b4-b791-b1d4572be315
 ```
 
@@ -39,12 +41,13 @@ Application Options:
       --sync.interval=             Sync interval (time.duration) (default: 1h) [$SYNC_INTERVAL]
       --azure.subscription=        Azure subscription ID [$AZURE_SUBSCRIPTION_ID]
       --kubeconfig=                Kuberentes config path (should be empty if in-cluster) [$KUBECONFIG]
+      --kubernetes.label.format=   Kubernetes label format (sprintf, if empty, labels are not set) (default: azure.k8s.io/%s) [$KUBERNETES_LABEL_FORMAT]
       --msi.scheme.group=          MSI scheme group name (default: aadpodidentity.k8s.io) [$MSI_SCHEME_GROUP]
       --msi.scheme.version=        MSI scheme version (default: v1) [$MSI_SCHEME_VERSION]
       --msi.scheme.resource=       MSI scheme resource name (singular) (default: AzureIdentity) [$MSI_SCHEME_RESOURCE]
       --msi.scheme.resources=      MSI scheme resources name (pural) (default: azureidentities) [$MSI_SCHEME_RESOURCES]
       --msi.namespaced             Set aadpodidentity.k8s.io/Behavior=namespaced annotation [$MSI_NAMESPACED]
-      --msi.tag.namespace=         Name of Kubernetes namespace (default: k8snamespace) [$MSI_TAG_NAMESPACE]
+      --msi.template.namespace=    Golang template for Kubernetes namespace (default: {{index .Tags "k8snamespace"}}) [$MSI_TEMPLATE_NAMESPACE]
       --msi.template.resourcename= Golang template for Kubernetes resource name (default: {{ .Name }}-{{ .ClientId }}) [$MSI_TEMPLATE_RESOURCENAME]
       --bind=                      Server address (default: :8080) [$SERVER_BIND]
 

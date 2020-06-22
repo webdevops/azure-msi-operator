@@ -39,13 +39,22 @@ var opts struct {
 	KubernetesLabelFormat string `long:"kubernetes.label.format" env:"KUBERNETES_LABEL_FORMAT"  description:"Kubernetes label format (sprintf, if empty, labels are not set)" default:"azure.k8s.io/%s"`
 
 	// Msi settings
-	MsiSchemeGroup          string `long:"msi.scheme.group"           env:"MSI_SCHEME_GROUP"           description:"MSI scheme group name" default:"aadpodidentity.k8s.io"`
-	MsiSchemeVersion        string `long:"msi.scheme.version"         env:"MSI_SCHEME_VERSION"         description:"MSI scheme version" default:"v1"`
-	MsiSchemeResource       string `long:"msi.scheme.resource"        env:"MSI_SCHEME_RESOURCE"        description:"MSI scheme resource name (singular)" default:"AzureIdentity"`
-	MsiSchemeResources      string `long:"msi.scheme.resources"       env:"MSI_SCHEME_RESOURCES"       description:"MSI scheme resources name (pural)" default:"azureidentities"`
 	MsiNamespaced           bool   `long:"msi.namespaced"             env:"MSI_NAMESPACED"             description:"Set aadpodidentity.k8s.io/Behavior=namespaced annotation"`
 	MsiTemplateNamespace    string `long:"msi.template.namespace"     env:"MSI_TEMPLATE_NAMESPACE"     description:"Golang template for Kubernetes namespace" default:"{{index .Tags \"k8snamespace\"}}"`
 	MsiTemplateResourceName string `long:"msi.template.resourcename"  env:"MSI_TEMPLATE_RESOURCENAME"  description:"Golang template for Kubernetes resource name" default:"{{ .Name }}-{{ .ClientId }}"`
+
+	// AzureIdentity
+	AzureIdentityGroup          string `long:"azureidentity.scheme.group"           env:"AZUREIDENTITY_SCHEME_GROUP"           description:"AzureIdentity scheme group name" default:"aadpodidentity.k8s.io"`
+	AzureIdentityVersion        string `long:"azureidentity.scheme.version"         env:"AZUREIDENTITY_SCHEME_VERSION"         description:"AzureIdentity scheme version" default:"v1"`
+	AzureIdentityResource       string `long:"azureidentity.scheme.resource"        env:"AZUREIDENTITY_SCHEME_RESOURCE"        description:"AzureIdentity scheme resource name (singular)" default:"AzureIdentity"`
+	AzureIdentityResources      string `long:"azureidentity.scheme.resources"       env:"AZUREIDENTITY_SCHEME_RESOURCES"       description:"AzureIdentity scheme resources name (pural)" default:"azureidentities"`
+
+	// AzureIdentityBinding
+	AzureIdentityBindingGroup          string `long:"azureidentitybinding.scheme.group"           env:"AZUREIDENTITYBINDING_SCHEME_GROUP"           description:"AzureIdentityBinding scheme group name" default:"aadpodidentity.k8s.io"`
+	AzureIdentityBindingVersion        string `long:"azureidentitybinding.scheme.version"         env:"AZUREIDENTITYBINDING_SCHEME_VERSION"         description:"AzureIdentityBinding scheme version" default:"v1"`
+	AzureIdentityBindingResource       string `long:"azureidentitybinding.scheme.resource"        env:"AZUREIDENTITYBINDING_SCHEME_RESOURCE"        description:"AzureIdentityBinding scheme resource name (singular)" default:"AzureIdentityBinding"`
+	AzureIdentityBindingResources      string `long:"azureidentitybinding.scheme.resources"       env:"AZUREIDENTITYBINDING_SCHEME_RESOURCES"       description:"AzureIdentityBinding scheme resources name (pural)" default:"azureidentitybindings"`
+	AzureIdentityBindingSync        bool `long:"azureidentitybinding.sync"  env:"AZUREIDENTITYBINDING_SYNC"  description:"Sync AzureIdentity to AzureIdentityBinding using lookup label"`
 
 	// server settings
 	ServerBind string `long:"bind" env:"SERVER_BIND"  description:"Server address"  default:":8080"`

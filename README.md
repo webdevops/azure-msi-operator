@@ -85,7 +85,7 @@ Templates
 
 [golang templates](https://golang.org/pkg/text/template/) are used to offer flexible customization for 
 namespace (`--azureidentity.template.namespace`) and resourcename (`--azureidentity.template.resourcename`) 
-detection/creation, following informations are available:
+detection/creation, following information are available:
 ```
     Id               string
     Name             string

@@ -197,21 +197,23 @@ func (m *MsiOperator) Start(syncInterval time.Duration) {
 	go func() {
 		for {
 			Logger.Info("starting sync")
+			overallStartTime := time.Now()
 
 			for _, subscription := range m.azure.subscriptionList {
-				startTime := time.Now()
+				subscriptionStartTime := time.Now()
 				Logger.Infof("using Azure Subscription \"%s\" (%s)", *subscription.DisplayName, *subscription.SubscriptionID)
 				err := m.upsertSubscription(&subscription)
 				if err != nil {
 					Logger.Error(err)
 				}
 
-				syncDuration := time.Now().Sub(startTime)
-				m.prometheus.duration.WithLabelValues(*subscription.SubscriptionID).Set(syncDuration.Seconds())
+				subscriptionSyncDuration := time.Now().Sub(subscriptionStartTime)
+				m.prometheus.duration.WithLabelValues(*subscription.SubscriptionID).Set(subscriptionSyncDuration.Seconds())
 				m.prometheus.lastSync.WithLabelValues(*subscription.SubscriptionID).SetToCurrentTime()
 			}
 
-			Logger.Infof("finished, waiting %v for next sync", syncInterval)
+			overallDuration := time.Now().Sub(overallStartTime)
+			Logger.Infof("finished after %s, waiting %s for next sync", overallDuration.String(), syncInterval.String())
 			time.Sleep(syncInterval)
 		}
 	}()
@@ -379,7 +381,7 @@ func (m *MsiOperator) generateMsiKubernetesResourceInfo(msi *msi.Identity) (msiI
 		TenantId:       msi.TenantID.String(),
 		PrincipalID:    msi.PrincipalID.String(),
 		Tags:           ResourceTags,
-		Type:           string(msi.Type),
+		Type:           *msi.Type,
 	}
 
 	msiInfo.Msi = msi

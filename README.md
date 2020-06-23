@@ -28,7 +28,7 @@ metadata:
   namespace: test123
   labels:
     azure.k8s.io/msi-resourcename: foobar
-    azure.k8s.io/msi-resourcerroup: f-we-foobar-rg
+    azure.k8s.io/msi-resourcerroup: barfoo
     azure.k8s.io/msi-subscription: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 spec:
   type: 0
@@ -44,8 +44,8 @@ metadata:
   labels:
     # used for sync AzureIdentity (eg. if recreated) to AzureIdentityBinding
     # if --azureidentitybinding.sync is used
-    azure.k8s.io/msi-resourcegroup: barfoo
     azure.k8s.io/msi-resourcename: foobar
+    azure.k8s.io/msi-resourcegroup: barfoo
     azure.k8s.io/msi-subscription: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
   name: foobar
   namespace: test123

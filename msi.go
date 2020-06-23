@@ -234,8 +234,13 @@ func (m *MsiOperator) upsertSubscription(subscription *subscriptions.Subscriptio
 		}
 
 		// check if namespace/resource was found
-		if msiInfo.KubernetesNamespace == nil || msiInfo.KubernetesResourceName == nil {
-			Logger.Verbosef("unable to generate Kubernetes namespace or resource name for Azure MSI %v", *msi.ID)
+		if msiInfo.KubernetesNamespace == nil {
+			Logger.Verbosef("unable to generate Kubernetes namespace name for Azure MSI %v", *msi.ID)
+			continue
+		}
+
+		if msiInfo.KubernetesResourceName == nil {
+			Logger.Verbosef("unable to generate Kubernetes resource name for Azure MSI %v", *msi.ID)
 			continue
 		}
 
@@ -346,6 +351,13 @@ func (m *MsiOperator) generateMsiKubernetesResourceInfo(msi *msi.Identity) (msiI
 		return
 	}
 
+	ResourceTags := map[string]string{}
+	for tagName, tagValue := range msi.Tags {
+		if tagValue != nil {
+			ResourceTags[tagName] = *tagValue
+		}
+	}
+
 	templateData := struct {
 		Id             string
 		Name           string
@@ -355,7 +367,7 @@ func (m *MsiOperator) generateMsiKubernetesResourceInfo(msi *msi.Identity) (msiI
 		ClientId       string
 		TenantId       string
 		PrincipalID    string
-		Tags           map[string]*string
+		Tags           map[string]string
 		Type           string
 	}{
 		Id:             *msi.ID,
@@ -366,7 +378,7 @@ func (m *MsiOperator) generateMsiKubernetesResourceInfo(msi *msi.Identity) (msiI
 		ClientId:       msi.ClientID.String(),
 		TenantId:       msi.TenantID.String(),
 		PrincipalID:    msi.PrincipalID.String(),
-		Tags:           msi.Tags,
+		Tags:           ResourceTags,
 		Type:           string(msi.Type),
 	}
 

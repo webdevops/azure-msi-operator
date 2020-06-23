@@ -95,7 +95,7 @@ detection/creation, following informations are available:
     ClientId         string
     TenantId         string
     PrincipalID      string
-    Tags             map[string]*string
+    Tags             map[string]string
     Type             string
 ```
 

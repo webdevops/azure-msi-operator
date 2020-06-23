@@ -34,7 +34,7 @@ const (
 	// AzureIdentityBinding
 	K8sSchemeAzureIdentityBindingGroup            = "aadpodidentity.k8s.io"
 	K8sSchemeAzureIdentityBindingVersion          = "v1"
-	//K8sSchemeAzureIdentityBindingResourceSingular = "AzureIdentityBinding"
+	K8sSchemeAzureIdentityBindingResourceSingular = "AzureIdentityBinding"
 	K8sSchemeAzureIdentityBindingResourcePlural   = "azureidentitybindings"
 )
 
@@ -51,7 +51,8 @@ type (
 		}
 
 		prometheus struct {
-			msiResourceSynced *prometheus.CounterVec
+			msiResourcs       *prometheus.GaugeVec
+			msiResourcsSuccess *prometheus.CounterVec
 			msiResourceErrors *prometheus.CounterVec
 			lastSync          *prometheus.GaugeVec
 			duration          *prometheus.GaugeVec
@@ -155,21 +156,21 @@ func (m *MsiOperator) initKubernetes() {
 }
 
 func (m *MsiOperator) initPrometheus() {
-	m.prometheus.msiResourceSynced = prometheus.NewCounterVec(
+	m.prometheus.msiResourcsSuccess = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "azuremsi_sync_resources_success",
 			Help: "Azure MSI operator successfull resource syncs",
 		},
-		[]string{"subscription"},
+		[]string{"subscription", "resource"},
 	)
-	prometheus.MustRegister(m.prometheus.msiResourceSynced)
+	prometheus.MustRegister(m.prometheus.msiResourcsSuccess)
 
 	m.prometheus.msiResourceErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "azuremsi_sync_resources_errors",
 			Help: "Azure MSI operator failed resource syncs",
 		},
-		[]string{"subscription"},
+		[]string{"subscription", "resource"},
 	)
 	prometheus.MustRegister(m.prometheus.msiResourceErrors)
 
@@ -254,9 +255,9 @@ func (m *MsiOperator) upsertSubscription(subscription *subscriptions.Subscriptio
 			_, err := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).Update(ctx, k8sPodIdentity, metav1.UpdateOptions{})
 			if err != nil {
 				Logger.Error(err)
-				m.prometheus.msiResourceErrors.WithLabelValues(*subscription.SubscriptionID).Inc()
+				m.prometheus.msiResourceErrors.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
 			} else {
-				m.prometheus.msiResourceSynced.WithLabelValues(*subscription.SubscriptionID).Inc()
+				m.prometheus.msiResourcsSuccess.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
 			}
 		} else {
 			// create
@@ -282,9 +283,9 @@ func (m *MsiOperator) upsertSubscription(subscription *subscriptions.Subscriptio
 			_, err := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).Create(ctx, k8sPodIdentity, metav1.CreateOptions{})
 			if err != nil {
 				Logger.Error(err)
-				m.prometheus.msiResourceErrors.WithLabelValues(*subscription.SubscriptionID).Inc()
+				m.prometheus.msiResourceErrors.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
 			} else {
-				m.prometheus.msiResourceSynced.WithLabelValues(*subscription.SubscriptionID).Inc()
+				m.prometheus.msiResourcsSuccess.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
 			}
 		}
 
@@ -326,6 +327,9 @@ func (m *MsiOperator) syncAzureIdentityToAzureIdentityBinding(msiInfo MsiResourc
 			_, err := m.kubernetes.client.Resource(gvr).Namespace(*msiInfo.KubernetesNamespace).Update(ctx, &azureIdentityBinding, metav1.UpdateOptions{})
 			if err != nil {
 				Logger.Error(err)
+				m.prometheus.msiResourceErrors.WithLabelValues(*msiInfo.AzureSubscriptionId, K8sSchemeAzureIdentityBindingResourceSingular).Inc()
+			} else {
+				m.prometheus.msiResourcsSuccess.WithLabelValues(*msiInfo.AzureSubscriptionId, K8sSchemeAzureIdentityBindingResourceSingular).Inc()
 			}
 		}
 	}

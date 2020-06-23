@@ -24,6 +24,20 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
+const (
+	// AzureIdentity
+	K8sSchemeAzureIdentityGroup            = "aadpodidentity.k8s.io"
+	K8sSchemeAzureIdentityVersion          = "v1"
+	K8sSchemeAzureIdentityResourceSingular = "AzureIdentity"
+	K8sSchemeAzureIdentityResourcePlural   = "azureidentities"
+
+	// AzureIdentityBinding
+	K8sSchemeAzureIdentityBindingGroup            = "aadpodidentity.k8s.io"
+	K8sSchemeAzureIdentityBindingVersion          = "v1"
+	//K8sSchemeAzureIdentityBindingResourceSingular = "AzureIdentityBinding"
+	K8sSchemeAzureIdentityBindingResourcePlural   = "azureidentitybindings"
+)
+
 type (
 	MsiOperator struct {
 		kubernetes struct {
@@ -45,17 +59,17 @@ type (
 
 		msi struct {
 			resourceNameTemplate *template.Template
-			namespaceTemplate *template.Template
+			namespaceTemplate    *template.Template
 		}
 	}
 
 	MsiResourceInfo struct {
-		Msi *msi.Identity
-		AzureResourceName *string
-		AzureResourceGroup *string
-		AzureSubscriptionId *string
-		KubernetesResourceName      *string
-		KubernetesNamespace *string
+		Msi                    *msi.Identity
+		AzureResourceName      *string
+		AzureResourceGroup     *string
+		AzureSubscriptionId    *string
+		KubernetesResourceName *string
+		KubernetesNamespace    *string
 	}
 )
 
@@ -64,13 +78,13 @@ func (m *MsiOperator) Init() {
 	m.initKubernetes()
 	m.initPrometheus()
 
-	if t, err := template.New("msiResourceName").Parse(opts.MsiTemplateResourceName); err == nil {
+	if t, err := template.New("msiResourceName").Parse(opts.AzureIdentityTemplateResourceName); err == nil {
 		m.msi.resourceNameTemplate = t
 	} else {
 		panic(err)
 	}
 
-	if t, err := template.New("msiNamespace").Parse(opts.MsiTemplateNamespace); err == nil {
+	if t, err := template.New("msiNamespace").Parse(opts.AzureIdentityTemplateNamespace); err == nil {
 		m.msi.namespaceTemplate = t
 	} else {
 		panic(err)
@@ -210,7 +224,7 @@ func (m *MsiOperator) upsertSubscription(subscription *subscriptions.Subscriptio
 		return err
 	}
 
-	gvr := schema.GroupVersionResource{Group: opts.AzureIdentityGroup, Version: opts.AzureIdentityVersion, Resource: opts.AzureIdentityResources}
+	gvr := schema.GroupVersionResource{Group: K8sSchemeAzureIdentityGroup, Version: K8sSchemeAzureIdentityVersion, Resource: K8sSchemeAzureIdentityResourcePlural}
 	for _, msi := range msiList {
 		msiInfo, err := m.generateMsiKubernetesResourceInfo(msi)
 		if err != nil {
@@ -230,7 +244,7 @@ func (m *MsiOperator) upsertSubscription(subscription *subscriptions.Subscriptio
 		k8sPodIdentity, _ := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).Get(ctx, k8sResourceName, metav1.GetOptions{})
 		if k8sPodIdentity != nil {
 			// update
-			Logger.Verbosef("updating AzureIdentity %v/%v for %v", k8sNamespace, k8sResourceName, *msi.ID)
+			Logger.Infof("updating AzureIdentity %v/%v for %v", k8sNamespace, k8sResourceName, *msi.ID)
 
 			if err := m.applyMsiToK8sObject(msi, k8sPodIdentity); err != nil {
 				Logger.Error(err)
@@ -246,7 +260,7 @@ func (m *MsiOperator) upsertSubscription(subscription *subscriptions.Subscriptio
 			}
 		} else {
 			// create
-			Logger.Verbosef("creating AzureIdentity %v/%v for %v", k8sNamespace, k8sResourceName, *msi.ID)
+			Logger.Infof("creating AzureIdentity %v/%v for %v", k8sNamespace, k8sResourceName, *msi.ID)
 
 			// object
 			k8sPodIdentity = &unstructured.Unstructured{
@@ -287,7 +301,7 @@ func (m *MsiOperator) upsertSubscription(subscription *subscriptions.Subscriptio
 
 func (m *MsiOperator) syncAzureIdentityToAzureIdentityBinding(msiInfo MsiResourceInfo) error {
 	ctx := context.Background()
-	gvr := schema.GroupVersionResource{Group: opts.AzureIdentityBindingGroup, Version: opts.AzureIdentityBindingVersion, Resource: opts.AzureIdentityBindingResources}
+	gvr := schema.GroupVersionResource{Group: K8sSchemeAzureIdentityBindingGroup, Version: K8sSchemeAzureIdentityBindingVersion, Resource: K8sSchemeAzureIdentityBindingResourcePlural}
 
 	labelSubscription := fmt.Sprintf(opts.KubernetesLabelFormat, "msi-subscription")
 	labelResourceGroup := fmt.Sprintf(opts.KubernetesLabelFormat, "msi-resourcegroup")
@@ -329,25 +343,27 @@ func (m *MsiOperator) generateMsiKubernetesResourceInfo(msi *msi.Identity) (msiI
 	}
 
 	templateData := struct {
-		Id               string
-		Name             string
-		Location         string
-		ResourceGroup    string
-		SubscriptionName string
-		ClientId         string
-		TenantId         string
-		Tags             map[string]*string
-		Type             string
+		Id             string
+		Name           string
+		Location       string
+		ResourceGroup  string
+		SubscriptionId string
+		ClientId       string
+		TenantId       string
+		PrincipalID    string
+		Tags           map[string]*string
+		Type           string
 	}{
-		Id:               *msi.ID,
-		Name:             *msi.Name,
-		Location:         *msi.Location,
-		ResourceGroup:    resourceInfo.ResourceGroup,
-		SubscriptionName: resourceInfo.SubscriptionID,
-		ClientId:         msi.ClientID.String(),
-		TenantId:         msi.TenantID.String(),
-		Tags:             msi.Tags,
-		Type:             string(msi.Type),
+		Id:             *msi.ID,
+		Name:           *msi.Name,
+		Location:       *msi.Location,
+		ResourceGroup:  resourceInfo.ResourceGroup,
+		SubscriptionId: resourceInfo.SubscriptionID,
+		ClientId:       msi.ClientID.String(),
+		TenantId:       msi.TenantID.String(),
+		PrincipalID:    msi.PrincipalID.String(),
+		Tags:           msi.Tags,
+		Type:           string(msi.Type),
 	}
 
 	msiInfo.Msi = msi
@@ -384,13 +400,12 @@ func (m *MsiOperator) applyMsiToK8sObject(msi *msi.Identity, k8sResource *unstru
 	}
 
 	// main
-	resourceApiVersion := fmt.Sprintf("%s/%s", opts.AzureIdentityGroup, opts.AzureIdentityVersion)
+	resourceApiVersion := fmt.Sprintf("%s/%s", K8sSchemeAzureIdentityBindingGroup, K8sSchemeAzureIdentityBindingVersion)
 	if err := unstructured.SetNestedField(k8sResource.Object, resourceApiVersion, "apiVersion"); err != nil {
 		return fmt.Errorf("failed to set object apiversion value: %v", err)
 	}
 
-	resourceKind := opts.AzureIdentityResource
-	if err := unstructured.SetNestedField(k8sResource.Object, resourceKind, "kind"); err != nil {
+	if err := unstructured.SetNestedField(k8sResource.Object, K8sSchemeAzureIdentityResourceSingular, "kind"); err != nil {
 		return fmt.Errorf("failed to set object kind value: %v", err)
 	}
 
@@ -408,7 +423,7 @@ func (m *MsiOperator) applyMsiToK8sObject(msi *msi.Identity, k8sResource *unstru
 	}
 
 	// annotations
-	if opts.MsiNamespaced {
+	if opts.AzureIdentityNamespaced {
 		if err := unstructured.SetNestedField(k8sResource.Object, "namespaced", "metadata", "annotations", "aadpodidentity.k8s.io/Behavior"); err != nil {
 			return fmt.Errorf("failed to set metadata.annotations[aadpodidentity.k8s.io/Behavior] value: %v", err)
 		}

@@ -1,0 +1,96 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: azure-msi-operator
+  namespace: default
+  labels:
+    app: azure-msi-operator
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: azure-msi-operator
+  template:
+    metadata:
+      labels:
+        app: azure-msi-operator
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '8080'
+    spec:
+      serviceAccountName: azure-msi-operator
+      containers:
+        - name: azure-msi-operator
+          image: webdevops/azure-msi-operator:latest
+          env:
+            #####################################
+            # settings
+            # verbose output
+            - name: VERBOSE
+              value: "0"
+
+            # sync interval duration
+            - name: SYNC_INTERVAL
+              value: "15m"
+
+            # enfoce namespaced AzureIdenity (security feature)
+            - name: AZUREIDENTITY_NAMESPACED
+              value: "1"
+
+            # enable sync of AzureIdentityBindings to AzureIdentity (based on labels; eg in development environments)
+            - name: AZUREIDENTITYBINDING_SYNC
+              value: "0"
+
+            # overrides namespace detection, can also be hardcoded
+            #- name: AZUREIDENTITY_TEMPLATE_NAMESPACE
+            #  value: "{{index .Tags "k8snamespace"}}"
+
+            # overrides resourcename creation
+            #- name: $AZUREIDENTITY_TEMPLATE_RESOURCENAME
+            #  value: "{{ .Name }}-{{ .ClientId }}"
+
+            # limit to this Azure Subscription
+            #- name: AZURE_SUBSCRIPTION_ID
+            #  value: "d86bcf13-ddf7-45ea-82f1-6f656767a318"
+
+            #####################################
+            # Azure auth (using AzureAD ServicePrincipal)
+            - name: AZURE_TENANT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: azure-msi-operator
+                  key: AZURE_TENANT_ID
+            - name: AZURE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: azure-msi-operator
+                  key: AZURE_CLIENT_ID
+            - name: AZURE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: azure-msi-operator
+                  key: AZURE_CLIENT_SECRET
+          ports:
+            - containerPort: 8080
+              name: http-metrics
+          resources:
+            requests:
+              memory: "100Mi"
+              cpu: "25m"
+            limits:
+              memory: "100Mi"
+              cpu: "500m"
+          readinessProbe: &probe
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http-metrics
+            failureThreshold: 1
+            periodSeconds: 10

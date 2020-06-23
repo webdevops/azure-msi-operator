@@ -62,31 +62,54 @@ Usage:
   azure-msi-operator [OPTIONS]
 
 Application Options:
-  -v, --verbose                                Verbose mode [$VERBOSE]
-      --sync.interval=                         Sync interval (time.duration) (default: 1h) [$SYNC_INTERVAL]
-      --azure.subscription=                    Azure subscription ID [$AZURE_SUBSCRIPTION_ID]
-      --kubeconfig=                            Kuberentes config path (should be empty if in-cluster) [$KUBECONFIG]
-      --kubernetes.label.format=               Kubernetes label format (sprintf, if empty, labels are not set) (default: azure.k8s.io/%s) [$KUBERNETES_LABEL_FORMAT]
-      --msi.namespaced                         Set aadpodidentity.k8s.io/Behavior=namespaced annotation [$MSI_NAMESPACED]
-      --msi.template.namespace=                Golang template for Kubernetes namespace (default: {{index .Tags "k8snamespace"}}) [$MSI_TEMPLATE_NAMESPACE]
-      --msi.template.resourcename=             Golang template for Kubernetes resource name (default: {{ .Name }}-{{ .ClientId }}) [$MSI_TEMPLATE_RESOURCENAME]
-      --azureidentity.scheme.group=            AzureIdentity scheme group name (default: aadpodidentity.k8s.io) [$AZUREIDENTITY_SCHEME_GROUP]
-      --azureidentity.scheme.version=          AzureIdentity scheme version (default: v1) [$AZUREIDENTITY_SCHEME_VERSION]
-      --azureidentity.scheme.resource=         AzureIdentity scheme resource name (singular) (default: AzureIdentity) [$AZUREIDENTITY_SCHEME_RESOURCE]
-      --azureidentity.scheme.resources=        AzureIdentity scheme resources name (pural) (default: azureidentities) [$AZUREIDENTITY_SCHEME_RESOURCES]
-      --azureidentitybinding.scheme.group=     AzureIdentityBinding scheme group name (default: aadpodidentity.k8s.io) [$AZUREIDENTITYBINDING_SCHEME_GROUP]
-      --azureidentitybinding.scheme.version=   AzureIdentityBinding scheme version (default: v1) [$AZUREIDENTITYBINDING_SCHEME_VERSION]
-      --azureidentitybinding.scheme.resource=  AzureIdentityBinding scheme resource name (singular) (default: AzureIdentityBinding) [$AZUREIDENTITYBINDING_SCHEME_RESOURCE]
-      --azureidentitybinding.scheme.resources= AzureIdentityBinding scheme resources name (pural) (default: azureidentitybindings) [$AZUREIDENTITYBINDING_SCHEME_RESOURCES]
-      --azureidentitybinding.sync              Sync AzureIdentity to AzureIdentityBinding using lookup label [$AZUREIDENTITYBINDING_SYNC]
-      --bind=                                  Server address (default: :8080) [$SERVER_BIND]
+  -v, --verbose                              Verbose mode [$VERBOSE]
+      --sync.interval=                       Sync interval (time.duration) (default: 1h) [$SYNC_INTERVAL]
+      --azure.subscription=                  Azure subscription ID [$AZURE_SUBSCRIPTION_ID]
+      --kubeconfig=                          Kuberentes config path (should be empty if in-cluster) [$KUBECONFIG]
+      --kubernetes.label.format=             Kubernetes label format (sprintf, if empty, labels are not set) (default: azure.k8s.io/%s) [$KUBERNETES_LABEL_FORMAT]
+      --azureidentity.namespaced             Set aadpodidentity.k8s.io/Behavior=namespaced annotation for AzureIdenity resources [$AZUREIDENTITY_NAMESPACED]
+      --azureidentity.template.namespace=    Golang template for Kubernetes namespace (default: {{index .Tags "k8snamespace"}}) [$AZUREIDENTITY_TEMPLATE_NAMESPACE]
+      --azureidentity.template.resourcename= Golang template for Kubernetes resource name (default: {{ .Name }}-{{ .ClientId }}) [$AZUREIDENTITY_TEMPLATE_RESOURCENAME]
+      --azureidentitybinding.sync            Sync AzureIdentity to AzureIdentityBinding using lookup label [$AZUREIDENTITYBINDING_SYNC]
+      --bind=                                Server address (default: :8080) [$SERVER_BIND]
 
 Help Options:
-  -h, --help                                   Show this help message
+  -h, --help                                 Show this help message
 ```
 
 for Azure API authentication (using ENV vars) see https://github.com/Azure/azure-sdk-for-go#authentication
 
+
+Templates
+---------
+
+[golang templates](https://golang.org/pkg/text/template/) are used to offer flexible customization for 
+namespace (`--azureidentity.template.namespace`) and resourcename (`--azureidentity.template.resourcename`) 
+detection/creation, following informations are available:
+```
+    Id               string
+    Name             string
+    Location         string
+    ResourceGroup    string
+    SubscriptionId   string
+    ClientId         string
+    TenantId         string
+    PrincipalID      string
+    Tags             map[string]*string
+    Type             string
+```
+
+Examples :
+```yaml
+  env:
+    # Use Azure ResourceName as AzureIdentity name (without ClientID)
+    - name: AZUREIDENTITY_TEMPLATE_RESOURCENAME
+      value "{{ .Name }}"
+
+    # Use different Tag name for Namespace
+    - name: AZUREIDENTITY_TEMPLATE_RESOURCENAME
+      value: '{{index .Tags "namespace"}}'
+```
 
 Metrics
 -------

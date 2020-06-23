@@ -51,11 +51,11 @@ type (
 		}
 
 		prometheus struct {
-			msiResourcs       *prometheus.GaugeVec
+			msiResourcs        *prometheus.GaugeVec
 			msiResourcsSuccess *prometheus.CounterVec
-			msiResourceErrors *prometheus.CounterVec
-			lastSync          *prometheus.GaugeVec
-			duration          *prometheus.GaugeVec
+			msiResourceErrors  *prometheus.CounterVec
+			lastSync           *prometheus.GaugeVec
+			duration           *prometheus.GaugeVec
 		}
 
 		msi struct {

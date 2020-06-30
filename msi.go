@@ -456,7 +456,7 @@ func (m *MsiOperator) applyMsiToK8sObject(msi *msi.Identity, k8sResource *unstru
 			return fmt.Errorf("failed to set metadata.labels[%v] value: %v", labelName, err)
 		}
 
-		labelName = fmt.Sprintf(opts.KubernetesLabelFormat, "msi-resourcerroup")
+		labelName = fmt.Sprintf(opts.KubernetesLabelFormat, "msi-resourcegroup")
 		if err := unstructured.SetNestedField(k8sResource.Object, resourceInfo.ResourceGroup, "metadata", "labels", labelName); err != nil {
 			return fmt.Errorf("failed to set metadata.labels[%v] value: %v", labelName, err)
 		}

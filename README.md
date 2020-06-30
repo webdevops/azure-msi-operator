@@ -28,7 +28,7 @@ metadata:
   namespace: test123
   labels:
     azure.k8s.io/msi-resourcename: foobar
-    azure.k8s.io/msi-resourcerroup: barfoo
+    azure.k8s.io/msi-resourcegroup: barfoo
     azure.k8s.io/msi-subscription: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 spec:
   type: 0

@@ -62,7 +62,9 @@ Usage:
   azure-msi-operator [OPTIONS]
 
 Application Options:
-  -v, --verbose                              Verbose mode [$VERBOSE]
+      --debug                                debug mode [$DEBUG]
+  -v, --verbose                              verbose mode [$VERBOSE]
+      --log.json                             Switch log output to json format [$LOG_JSON]
       --sync.interval=                       Sync interval (time.duration) (default: 1h) [$SYNC_INTERVAL]
       --azure.subscription=                  Azure subscription ID [$AZURE_SUBSCRIPTION_ID]
       --kubeconfig=                          Kuberentes config path (should be empty if in-cluster) [$KUBECONFIG]

@@ -262,13 +262,11 @@ func (m *MsiOperator) upsertSubscription(contextLogger *log.Entry, subscription 
 		k8sNamespace := *msiInfo.KubernetesNamespace
 		k8sResourceName := *msiInfo.KubernetesResourceName
 
-
 		// add k8s info to log
 		msiLogger = msiLogger.WithFields(log.Fields{
 			"k8sNamespace": k8sNamespace,
-			"k8sResource": k8sResourceName,
+			"k8sResource":  k8sResourceName,
 		})
-
 
 		k8sPodIdentity, _ := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).Get(ctx, k8sResourceName, metav1.GetOptions{})
 		if k8sPodIdentity != nil {

@@ -1,4 +1,4 @@
-package main
+package operator
 
 import (
 	"bytes"
@@ -11,6 +11,8 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 	"github.com/prometheus/client_golang/prometheus"
+	log "github.com/sirupsen/logrus"
+	"github.com/webdevops/azure-msi-operator/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -40,6 +42,8 @@ const (
 
 type (
 	MsiOperator struct {
+		Conf config.Opts
+
 		kubernetes struct {
 			client dynamic.Interface
 		}
@@ -66,6 +70,7 @@ type (
 
 	MsiResourceInfo struct {
 		Msi                    *msi.Identity
+		AzureResourceId        *string
 		AzureResourceName      *string
 		AzureResourceGroup     *string
 		AzureSubscriptionId    *string
@@ -79,13 +84,13 @@ func (m *MsiOperator) Init() {
 	m.initKubernetes()
 	m.initPrometheus()
 
-	if t, err := template.New("msiResourceName").Parse(opts.AzureIdentityTemplateResourceName); err == nil {
+	if t, err := template.New("msiResourceName").Parse(m.Conf.AzureIdentityTemplateResourceName); err == nil {
 		m.msi.resourceNameTemplate = t
 	} else {
 		panic(err)
 	}
 
-	if t, err := template.New("msiNamespace").Parse(opts.AzureIdentityTemplateNamespace); err == nil {
+	if t, err := template.New("msiNamespace").Parse(m.Conf.AzureIdentityTemplateNamespace); err == nil {
 		m.msi.namespaceTemplate = t
 	} else {
 		panic(err)
@@ -104,7 +109,7 @@ func (m *MsiOperator) initAzure() {
 	subscriptionsClient := subscriptions.NewClient()
 	subscriptionsClient.Authorizer = m.azure.authorizer
 
-	if len(opts.AzureSubscription) == 0 {
+	if len(m.Conf.AzureSubscription) == 0 {
 		// auto lookup subscriptions
 		listResult, err := subscriptionsClient.List(ctx)
 		if err != nil {
@@ -113,12 +118,12 @@ func (m *MsiOperator) initAzure() {
 		m.azure.subscriptionList = listResult.Values()
 
 		if len(m.azure.subscriptionList) == 0 {
-			panic(errors.New("no Azure Subscriptions found via auto detection, does this ServicePrincipal have read permissions to the subcriptions?"))
+			panic(errors.New("no Azure Subscriptions found via auto detection or ServicePrincipal doesn't have permission to read subscriptions"))
 		}
 	} else {
 		// fixed subscription list
 		m.azure.subscriptionList = []subscriptions.Subscription{}
-		for _, subId := range opts.AzureSubscription {
+		for _, subId := range m.Conf.AzureSubscription {
 			result, err := subscriptionsClient.Get(ctx, subId)
 			if err != nil {
 				panic(err)
@@ -141,7 +146,7 @@ func (m *MsiOperator) initAzure() {
 
 func (m *MsiOperator) initKubernetes() {
 	// get kubeconfig
-	kubeconf, err := clientcmd.BuildConfigFromFlags("", opts.KubernetesConfig)
+	kubeconf, err := clientcmd.BuildConfigFromFlags("", m.Conf.KubernetesConfig)
 	if err != nil {
 		panic(err)
 	}
@@ -196,15 +201,18 @@ func (m *MsiOperator) initPrometheus() {
 func (m *MsiOperator) Start(syncInterval time.Duration) {
 	go func() {
 		for {
-			Logger.Info("starting sync")
+			log.Info("starting sync")
 			overallStartTime := time.Now()
 
 			for _, subscription := range m.azure.subscriptionList {
 				subscriptionStartTime := time.Now()
-				Logger.Infof("using Azure Subscription \"%s\" (%s)", *subscription.DisplayName, *subscription.SubscriptionID)
-				err := m.upsertSubscription(&subscription)
+
+				contextLogger := log.WithField("subscription", *subscription.DisplayName)
+
+				contextLogger.Infof("using Azure Subscription \"%s\" (%s)", *subscription.DisplayName, *subscription.SubscriptionID)
+				err := m.upsertSubscription(contextLogger, &subscription)
 				if err != nil {
-					Logger.Error(err)
+					log.Error(err)
 				}
 
 				subscriptionSyncDuration := time.Now().Sub(subscriptionStartTime)
@@ -213,13 +221,13 @@ func (m *MsiOperator) Start(syncInterval time.Duration) {
 			}
 
 			overallDuration := time.Now().Sub(overallStartTime)
-			Logger.Infof("finished after %s, waiting %s for next sync", overallDuration.String(), syncInterval.String())
+			log.Infof("finished after %s, waiting %s for next sync", overallDuration.String(), syncInterval.String())
 			time.Sleep(syncInterval)
 		}
 	}()
 }
 
-func (m *MsiOperator) upsertSubscription(subscription *subscriptions.Subscription) error {
+func (m *MsiOperator) upsertSubscription(contextLogger *log.Entry, subscription *subscriptions.Subscription) error {
 	ctx := context.Background()
 
 	msiList, err := m.getAzureMsiList(subscription)
@@ -228,47 +236,60 @@ func (m *MsiOperator) upsertSubscription(subscription *subscriptions.Subscriptio
 	}
 
 	gvr := schema.GroupVersionResource{Group: K8sSchemeAzureIdentityGroup, Version: K8sSchemeAzureIdentityVersion, Resource: K8sSchemeAzureIdentityResourcePlural}
-	for _, msi := range msiList {
-		msiInfo, err := m.generateMsiKubernetesResourceInfo(msi)
+	for _, msiResource := range msiList {
+		msiInfo, err := m.generateMsiKubernetesResourceInfo(msiResource)
 		if err != nil {
-			Logger.Error(err)
+			contextLogger.Error(err)
 			continue
 		}
 
+		// add resource to log
+		msiLogger := contextLogger.WithFields(log.Fields{
+			"resource": *msiInfo.AzureResourceId,
+		})
+
 		// check if namespace/resource was found
 		if msiInfo.KubernetesNamespace == nil {
-			Logger.Verbosef("unable to generate Kubernetes namespace name for Azure MSI %v", *msi.ID)
+			msiLogger.Debugf("unable to generate Kubernetes namespace name for Azure MSI %v", *msiResource.ID)
 			continue
 		}
 
 		if msiInfo.KubernetesResourceName == nil {
-			Logger.Verbosef("unable to generate Kubernetes resource name for Azure MSI %v", *msi.ID)
+			msiLogger.Debugf("unable to generate Kubernetes resource name for Azure MSI %v", *msiResource.ID)
 			continue
 		}
 
 		k8sNamespace := *msiInfo.KubernetesNamespace
 		k8sResourceName := *msiInfo.KubernetesResourceName
 
+
+		// add k8s info to log
+		msiLogger = msiLogger.WithFields(log.Fields{
+			"k8sNamespace": k8sNamespace,
+			"k8sResource": k8sResourceName,
+		})
+
+
 		k8sPodIdentity, _ := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).Get(ctx, k8sResourceName, metav1.GetOptions{})
 		if k8sPodIdentity != nil {
 			// update
-			Logger.Infof("updating AzureIdentity %v/%v for %v", k8sNamespace, k8sResourceName, *msi.ID)
+			msiLogger.Infof("updating AzureIdentity %v/%v", k8sNamespace, k8sResourceName)
 
-			if err := m.applyMsiToK8sObject(msi, k8sPodIdentity); err != nil {
-				Logger.Error(err)
+			if err := m.applyMsiToK8sObject(msiResource, k8sPodIdentity); err != nil {
+				msiLogger.Error(err)
 				continue
 			}
 
 			_, err := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).Update(ctx, k8sPodIdentity, metav1.UpdateOptions{})
 			if err != nil {
-				Logger.Error(err)
+				msiLogger.Error(err)
 				m.prometheus.msiResourceErrors.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
 			} else {
 				m.prometheus.msiResourcsSuccess.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
 			}
 		} else {
 			// create
-			Logger.Infof("creating AzureIdentity %v/%v for %v", k8sNamespace, k8sResourceName, *msi.ID)
+			msiLogger.Infof("creating AzureIdentity %v/%v", k8sNamespace, k8sResourceName)
 
 			// object
 			k8sPodIdentity = &unstructured.Unstructured{
@@ -282,24 +303,24 @@ func (m *MsiOperator) upsertSubscription(subscription *subscriptions.Subscriptio
 				},
 			}
 
-			if err := m.applyMsiToK8sObject(msi, k8sPodIdentity); err != nil {
-				Logger.Error(err)
+			if err := m.applyMsiToK8sObject(msiResource, k8sPodIdentity); err != nil {
+				msiLogger.Error(err)
 				continue
 			}
 
 			_, err := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).Create(ctx, k8sPodIdentity, metav1.CreateOptions{})
 			if err != nil {
-				Logger.Error(err)
+				msiLogger.Error(err)
 				m.prometheus.msiResourceErrors.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
 			} else {
 				m.prometheus.msiResourcsSuccess.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
 			}
 		}
 
-		if opts.AzureIdentityBindingSync {
+		if m.Conf.AzureIdentityBindingSync {
 			err := m.syncAzureIdentityToAzureIdentityBinding(msiInfo)
 			if err != nil {
-				Logger.Error(err)
+				msiLogger.Error(err)
 			}
 		}
 	}
@@ -311,9 +332,9 @@ func (m *MsiOperator) syncAzureIdentityToAzureIdentityBinding(msiInfo MsiResourc
 	ctx := context.Background()
 	gvr := schema.GroupVersionResource{Group: K8sSchemeAzureIdentityBindingGroup, Version: K8sSchemeAzureIdentityBindingVersion, Resource: K8sSchemeAzureIdentityBindingResourcePlural}
 
-	labelSubscription := fmt.Sprintf(opts.KubernetesLabelFormat, "msi-subscription")
-	labelResourceGroup := fmt.Sprintf(opts.KubernetesLabelFormat, "msi-resourcegroup")
-	labelName := fmt.Sprintf(opts.KubernetesLabelFormat, "msi-resourcename")
+	labelSubscription := fmt.Sprintf(m.Conf.KubernetesLabelFormat, "msi-subscription")
+	labelResourceGroup := fmt.Sprintf(m.Conf.KubernetesLabelFormat, "msi-resourcegroup")
+	labelName := fmt.Sprintf(m.Conf.KubernetesLabelFormat, "msi-resourcename")
 
 	listOpts := metav1.ListOptions{
 		LabelSelector: fmt.Sprintf(
@@ -333,7 +354,7 @@ func (m *MsiOperator) syncAzureIdentityToAzureIdentityBinding(msiInfo MsiResourc
 
 			_, err := m.kubernetes.client.Resource(gvr).Namespace(*msiInfo.KubernetesNamespace).Update(ctx, &azureIdentityBinding, metav1.UpdateOptions{})
 			if err != nil {
-				Logger.Error(err)
+				log.Error(err)
 				m.prometheus.msiResourceErrors.WithLabelValues(*msiInfo.AzureSubscriptionId, K8sSchemeAzureIdentityBindingResourceSingular).Inc()
 			} else {
 				m.prometheus.msiResourcsSuccess.WithLabelValues(*msiInfo.AzureSubscriptionId, K8sSchemeAzureIdentityBindingResourceSingular).Inc()
@@ -345,7 +366,9 @@ func (m *MsiOperator) syncAzureIdentityToAzureIdentityBinding(msiInfo MsiResourc
 }
 
 func (m *MsiOperator) generateMsiKubernetesResourceInfo(msi *msi.Identity) (msiInfo MsiResourceInfo, err error) {
-	msiInfo = MsiResourceInfo{}
+	msiInfo = MsiResourceInfo{
+		AzureResourceId: msi.ID,
+	}
 
 	resourceInfo, parseErr := azure.ParseResourceID(*msi.ID)
 	if parseErr != nil {
@@ -391,7 +414,7 @@ func (m *MsiOperator) generateMsiKubernetesResourceInfo(msi *msi.Identity) (msiI
 
 	resNameBuf := &bytes.Buffer{}
 	if err := m.msi.resourceNameTemplate.Execute(resNameBuf, templateData); err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 	if val := resNameBuf.String(); val != "" {
 		msiInfo.KubernetesResourceName = &val
@@ -399,7 +422,7 @@ func (m *MsiOperator) generateMsiKubernetesResourceInfo(msi *msi.Identity) (msiI
 
 	namespaceBuf := &bytes.Buffer{}
 	if err := m.msi.namespaceTemplate.Execute(namespaceBuf, templateData); err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 	if val := namespaceBuf.String(); val != "" {
 		msiInfo.KubernetesNamespace = &val
@@ -441,7 +464,7 @@ func (m *MsiOperator) applyMsiToK8sObject(msi *msi.Identity, k8sResource *unstru
 	}
 
 	// annotations
-	if opts.AzureIdentityNamespaced {
+	if m.Conf.AzureIdentityNamespaced {
 		if err := unstructured.SetNestedField(k8sResource.Object, "namespaced", "metadata", "annotations", "aadpodidentity.k8s.io/Behavior"); err != nil {
 			return fmt.Errorf("failed to set metadata.annotations[aadpodidentity.k8s.io/Behavior] value: %v", err)
 		}
@@ -450,18 +473,18 @@ func (m *MsiOperator) applyMsiToK8sObject(msi *msi.Identity, k8sResource *unstru
 	}
 
 	// labels
-	if opts.KubernetesLabelFormat != "" {
-		labelName := fmt.Sprintf(opts.KubernetesLabelFormat, "msi-subscription")
+	if m.Conf.KubernetesLabelFormat != "" {
+		labelName := fmt.Sprintf(m.Conf.KubernetesLabelFormat, "msi-subscription")
 		if err := unstructured.SetNestedField(k8sResource.Object, resourceInfo.SubscriptionID, "metadata", "labels", labelName); err != nil {
 			return fmt.Errorf("failed to set metadata.labels[%v] value: %v", labelName, err)
 		}
 
-		labelName = fmt.Sprintf(opts.KubernetesLabelFormat, "msi-resourcegroup")
+		labelName = fmt.Sprintf(m.Conf.KubernetesLabelFormat, "msi-resourcegroup")
 		if err := unstructured.SetNestedField(k8sResource.Object, resourceInfo.ResourceGroup, "metadata", "labels", labelName); err != nil {
 			return fmt.Errorf("failed to set metadata.labels[%v] value: %v", labelName, err)
 		}
 
-		labelName = fmt.Sprintf(opts.KubernetesLabelFormat, "msi-resourcename")
+		labelName = fmt.Sprintf(m.Conf.KubernetesLabelFormat, "msi-resourcename")
 		if err := unstructured.SetNestedField(k8sResource.Object, resourceInfo.ResourceName, "metadata", "labels", labelName); err != nil {
 			return fmt.Errorf("failed to set metadata.labels[%v] value: %v", labelName, err)
 		}

@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"github.com/jessevdk/go-flags"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"log"
+	log "github.com/sirupsen/logrus"
+	"github.com/webdevops/azure-msi-operator/config"
+	"github.com/webdevops/azure-msi-operator/operator"
 	"net/http"
 	"os"
-	"time"
 )
 
 const (
@@ -16,59 +17,26 @@ const (
 
 var (
 	argparser *flags.Parser
-	Verbose   bool
-	Logger    *DaemonLogger
 
 	// Git version information
 	gitCommit = "<unknown>"
 	gitTag    = "<unknown>"
 )
 
-var opts struct {
-	// general settings
-	Verbose []bool `long:"verbose" short:"v" env:"VERBOSE"      description:"Verbose mode"`
-
-	// Sync settings
-	SyncInterval time.Duration `long:"sync.interval" env:"SYNC_INTERVAL"  description:"Sync interval (time.duration)"  default:"1h"`
-
-	// azure settings
-	AzureSubscription []string `long:"azure.subscription" env:"AZURE_SUBSCRIPTION_ID" env-delim:" "  description:"Azure subscription ID"`
-
-	// kubernetes settings
-	KubernetesConfig      string `long:"kubeconfig" env:"KUBECONFIG"  description:"Kuberentes config path (should be empty if in-cluster)"`
-	KubernetesLabelFormat string `long:"kubernetes.label.format" env:"KUBERNETES_LABEL_FORMAT"  description:"Kubernetes label format (sprintf, if empty, labels are not set)" default:"azure.k8s.io/%s"`
-
-	// Msi settings
-	AzureIdentityNamespaced           bool   `long:"azureidentity.namespaced"             env:"AZUREIDENTITY_NAMESPACED"             description:"Set aadpodidentity.k8s.io/Behavior=namespaced annotation for AzureIdenity resources"`
-	AzureIdentityTemplateNamespace    string `long:"azureidentity.template.namespace"     env:"AZUREIDENTITY_TEMPLATE_NAMESPACE"     description:"Golang template for Kubernetes namespace" default:"{{index .Tags \"k8snamespace\"}}"`
-	AzureIdentityTemplateResourceName string `long:"azureidentity.template.resourcename"  env:"AZUREIDENTITY_TEMPLATE_RESOURCENAME"  description:"Golang template for Kubernetes resource name" default:"{{ .Name }}-{{ .ClientId }}"`
-
-	// AzureIdentityBinding
-	AzureIdentityBindingSync bool `long:"azureidentitybinding.sync"  env:"AZUREIDENTITYBINDING_SYNC"  description:"Sync AzureIdentity to AzureIdentityBinding using lookup label"`
-
-	// server settings
-	ServerBind string `long:"bind" env:"SERVER_BIND"  description:"Server address"  default:":8080"`
-}
+var opts config.Opts
 
 func main() {
 	initArgparser()
 
-	// set verbosity
-	Verbose = len(opts.Verbose) >= 1
+	log.Infof("starting Azure Managed Service Identity Operator v%s (%s; by %v)", gitTag, gitCommit, Author)
 
-	Logger = NewLogger(log.Lshortfile, Verbose)
-	defer Logger.Close()
+	msiOperator := operator.MsiOperator{
+		Conf: opts,
+	}
+	msiOperator.Init()
+	msiOperator.Start(opts.SyncInterval)
 
-	// set verbosity
-	Verbose = len(opts.Verbose) >= 1
-
-	Logger.Infof("starting Azure Managed Service Identity Operator v%s (%s; by %v)", gitTag, gitCommit, Author)
-
-	operator := MsiOperator{}
-	operator.Init()
-	operator.Start(opts.SyncInterval)
-
-	Logger.Infof("starting http server on %s", opts.ServerBind)
+	log.Infof("starting http server on %s", opts.ServerBind)
 	startHttpServer()
 }
 
@@ -88,6 +56,22 @@ func initArgparser() {
 			os.Exit(1)
 		}
 	}
+
+	// verbose level
+	if opts.Logger.Verbose {
+		log.SetLevel(log.DebugLevel)
+	}
+
+	// debug level
+	if opts.Logger.Debug {
+		log.SetReportCaller(true)
+		log.SetLevel(log.TraceLevel)
+	}
+
+	// json log format
+	if opts.Logger.LogJson {
+		log.SetFormatter(&log.JSONFormatter{})
+	}
 }
 
 // start and handle prometheus handler
@@ -95,12 +79,12 @@ func startHttpServer() {
 	// healthz
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if _, err := fmt.Fprint(w, "Ok"); err != nil {
-			Logger.Error(err)
+			log.Error(err)
 		}
 	})
 
 	// prom metrics
 	http.Handle("/metrics", promhttp.Handler())
 
-	Logger.Fatal(http.ListenAndServe(opts.ServerBind, nil))
+	log.Fatal(http.ListenAndServe(opts.ServerBind, nil))
 }

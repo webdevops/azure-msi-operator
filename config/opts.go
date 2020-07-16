@@ -12,6 +12,7 @@ type Opts struct {
 
 	// Sync settings
 	SyncInterval time.Duration `long:"sync.interval" env:"SYNC_INTERVAL"  description:"Sync interval (time.duration)"  default:"1h"`
+	SyncLockTime time.Duration `long:"sync.locktime" env:"SYNC_LOCKTIME"  description:"Lock time until next sync (time.duration)" default:"5m"`
 
 	// azure settings
 	AzureSubscription []string `long:"azure.subscription" env:"AZURE_SUBSCRIPTION_ID" env-delim:" "  description:"Azure subscription ID"`

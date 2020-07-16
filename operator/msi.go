@@ -13,12 +13,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/webdevops/azure-msi-operator/config"
+	"golang.org/x/sync/semaphore"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
 	"os"
+	"strings"
 	"text/template"
 	"time"
 
@@ -43,6 +45,8 @@ const (
 type (
 	MsiOperator struct {
 		Conf config.Opts
+		ctx  context.Context
+		lock *semaphore.Weighted
 
 		kubernetes struct {
 			client dynamic.Interface
@@ -80,6 +84,9 @@ type (
 )
 
 func (m *MsiOperator) Init() {
+	m.ctx = context.Background()
+	m.lock = semaphore.NewWeighted(1)
+
 	m.initAzure()
 	m.initKubernetes()
 	m.initPrometheus()
@@ -99,8 +106,6 @@ func (m *MsiOperator) Init() {
 
 func (m *MsiOperator) initAzure() {
 	var err error
-	ctx := context.Background()
-
 	// setup azure authorizer
 	m.azure.authorizer, err = auth.NewAuthorizerFromEnvironment()
 	if err != nil {
@@ -111,7 +116,7 @@ func (m *MsiOperator) initAzure() {
 
 	if len(m.Conf.AzureSubscription) == 0 {
 		// auto lookup subscriptions
-		listResult, err := subscriptionsClient.List(ctx)
+		listResult, err := subscriptionsClient.List(m.ctx)
 		if err != nil {
 			panic(err)
 		}
@@ -124,7 +129,7 @@ func (m *MsiOperator) initAzure() {
 		// fixed subscription list
 		m.azure.subscriptionList = []subscriptions.Subscription{}
 		for _, subId := range m.Conf.AzureSubscription {
-			result, err := subscriptionsClient.Get(ctx, subId)
+			result, err := subscriptionsClient.Get(m.ctx, subId)
 			if err != nil {
 				panic(err)
 			}
@@ -199,37 +204,71 @@ func (m *MsiOperator) initPrometheus() {
 }
 
 func (m *MsiOperator) Start(syncInterval time.Duration) {
+	m.startIntervalSync(syncInterval)
+	m.startWatchSync()
+}
+
+func (m *MsiOperator) startIntervalSync(syncInterval time.Duration) {
 	go func() {
 		for {
-			log.Info("starting sync")
-			overallStartTime := time.Now()
-
-			for _, subscription := range m.azure.subscriptionList {
-				subscriptionStartTime := time.Now()
-
-				contextLogger := log.WithField("subscription", *subscription.DisplayName)
-
-				contextLogger.Infof("using Azure Subscription \"%s\" (%s)", *subscription.DisplayName, *subscription.SubscriptionID)
-				err := m.upsertSubscription(contextLogger, &subscription)
-				if err != nil {
-					log.Error(err)
-				}
-
-				subscriptionSyncDuration := time.Now().Sub(subscriptionStartTime)
-				m.prometheus.duration.WithLabelValues(*subscription.SubscriptionID).Set(subscriptionSyncDuration.Seconds())
-				m.prometheus.lastSync.WithLabelValues(*subscription.SubscriptionID).SetToCurrentTime()
-			}
-
-			overallDuration := time.Now().Sub(overallStartTime)
-			log.Infof("finished after %s, waiting %s for next sync", overallDuration.String(), syncInterval.String())
+			m.run()
 			time.Sleep(syncInterval)
 		}
 	}()
 }
 
-func (m *MsiOperator) upsertSubscription(contextLogger *log.Entry, subscription *subscriptions.Subscription) error {
-	ctx := context.Background()
+func (m *MsiOperator) startWatchSync() {
+	gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "namespaces"}
+	watch, err := m.kubernetes.client.Resource(gvr).Watch(m.ctx, metav1.ListOptions{Watch: true})
+	if err != nil {
+		log.Panic(err)
+	}
 
+	go func() {
+		for res := range watch.ResultChan() {
+			switch strings.ToLower(string(res.Type)) {
+			case "added":
+				//namespace := res.Object.(*unstructured.Unstructured)
+				m.run()
+			}
+		}
+	}()
+}
+
+func (m *MsiOperator) run() {
+	if !m.lock.TryAcquire(1) {
+		// already running
+		return
+	}
+	defer m.lock.Release(1)
+
+	log.Info("starting sync")
+	overallStartTime := time.Now()
+
+	for _, subscription := range m.azure.subscriptionList {
+		subscriptionStartTime := time.Now()
+
+		contextLogger := log.WithField("subscription", *subscription.DisplayName)
+
+		contextLogger.Infof("sync Azure Subscription \"%s\" (%s)", *subscription.DisplayName, *subscription.SubscriptionID)
+		err := m.upsertSubscription(contextLogger, &subscription)
+		if err != nil {
+			log.Error(err)
+		}
+
+		subscriptionSyncDuration := time.Now().Sub(subscriptionStartTime)
+		m.prometheus.duration.WithLabelValues(*subscription.SubscriptionID).Set(subscriptionSyncDuration.Seconds())
+		m.prometheus.lastSync.WithLabelValues(*subscription.SubscriptionID).SetToCurrentTime()
+	}
+
+	overallDuration := time.Now().Sub(overallStartTime)
+	log.Infof("finished after %s", overallDuration.String())
+
+	// lock next sync (keep up semaphore lock)
+	time.Sleep(m.Conf.SyncLockTime)
+}
+
+func (m *MsiOperator) upsertSubscription(contextLogger *log.Entry, subscription *subscriptions.Subscription) error {
 	msiList, err := m.getAzureMsiList(subscription)
 	if err != nil {
 		return err
@@ -268,7 +307,7 @@ func (m *MsiOperator) upsertSubscription(contextLogger *log.Entry, subscription 
 			"k8sResource":  k8sResourceName,
 		})
 
-		k8sPodIdentity, _ := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).Get(ctx, k8sResourceName, metav1.GetOptions{})
+		k8sPodIdentity, _ := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).Get(m.ctx, k8sResourceName, metav1.GetOptions{})
 		if k8sPodIdentity != nil {
 			// update
 			msiLogger.Infof("updating AzureIdentity %v/%v", k8sNamespace, k8sResourceName)
@@ -278,7 +317,7 @@ func (m *MsiOperator) upsertSubscription(contextLogger *log.Entry, subscription 
 				continue
 			}
 
-			_, err := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).Update(ctx, k8sPodIdentity, metav1.UpdateOptions{})
+			_, err := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).Update(m.ctx, k8sPodIdentity, metav1.UpdateOptions{})
 			if err != nil {
 				msiLogger.Error(err)
 				m.prometheus.msiResourceErrors.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
@@ -306,7 +345,7 @@ func (m *MsiOperator) upsertSubscription(contextLogger *log.Entry, subscription 
 				continue
 			}
 
-			_, err := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).Create(ctx, k8sPodIdentity, metav1.CreateOptions{})
+			_, err := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).Create(m.ctx, k8sPodIdentity, metav1.CreateOptions{})
 			if err != nil {
 				msiLogger.Error(err)
 				m.prometheus.msiResourceErrors.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
@@ -327,7 +366,6 @@ func (m *MsiOperator) upsertSubscription(contextLogger *log.Entry, subscription 
 }
 
 func (m *MsiOperator) syncAzureIdentityToAzureIdentityBinding(msiInfo MsiResourceInfo) error {
-	ctx := context.Background()
 	gvr := schema.GroupVersionResource{Group: K8sSchemeAzureIdentityBindingGroup, Version: K8sSchemeAzureIdentityBindingVersion, Resource: K8sSchemeAzureIdentityBindingResourcePlural}
 
 	labelSubscription := fmt.Sprintf(m.Conf.KubernetesLabelFormat, "msi-subscription")
@@ -342,7 +380,7 @@ func (m *MsiOperator) syncAzureIdentityToAzureIdentityBinding(msiInfo MsiResourc
 			labelName, *msiInfo.AzureResourceName,
 		),
 	}
-	list, _ := m.kubernetes.client.Resource(gvr).Namespace(*msiInfo.KubernetesNamespace).List(ctx, listOpts)
+	list, _ := m.kubernetes.client.Resource(gvr).Namespace(*msiInfo.KubernetesNamespace).List(m.ctx, listOpts)
 
 	if list != nil {
 		for _, azureIdentityBinding := range list.Items {
@@ -350,7 +388,7 @@ func (m *MsiOperator) syncAzureIdentityToAzureIdentityBinding(msiInfo MsiResourc
 				return fmt.Errorf("failed to set object kind value: %v", err)
 			}
 
-			_, err := m.kubernetes.client.Resource(gvr).Namespace(*msiInfo.KubernetesNamespace).Update(ctx, &azureIdentityBinding, metav1.UpdateOptions{})
+			_, err := m.kubernetes.client.Resource(gvr).Namespace(*msiInfo.KubernetesNamespace).Update(m.ctx, &azureIdentityBinding, metav1.UpdateOptions{})
 			if err != nil {
 				log.Error(err)
 				m.prometheus.msiResourceErrors.WithLabelValues(*msiInfo.AzureSubscriptionId, K8sSchemeAzureIdentityBindingResourceSingular).Inc()
@@ -492,12 +530,10 @@ func (m *MsiOperator) applyMsiToK8sObject(msi *msi.Identity, k8sResource *unstru
 }
 
 func (m *MsiOperator) getAzureMsiList(subscription *subscriptions.Subscription) (ret []*msi.Identity, err error) {
-	ctx := context.Background()
-
 	client := msi.NewUserAssignedIdentitiesClient(*subscription.SubscriptionID)
 	client.Authorizer = m.azure.authorizer
 
-	list, azureErr := client.ListBySubscriptionComplete(ctx)
+	list, azureErr := client.ListBySubscriptionComplete(m.ctx)
 	if azureErr != nil {
 		err = azureErr
 		return
@@ -506,7 +542,7 @@ func (m *MsiOperator) getAzureMsiList(subscription *subscriptions.Subscription) 
 	for list.NotDone() {
 		result := list.Value()
 		ret = append(ret, &result)
-		if list.NextWithContext(ctx) != nil {
+		if list.NextWithContext(m.ctx) != nil {
 			break
 		}
 	}

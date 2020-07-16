@@ -12,6 +12,7 @@ type Opts struct {
 
 	// Sync settings
 	SyncInterval time.Duration `long:"sync.interval" env:"SYNC_INTERVAL"  description:"Sync interval (time.duration)"  default:"1h"`
+	SyncWatch    bool          `long:"sync.watch"    env:"SYNC_WATCH"     description:"Sync using namespace watch"`
 	SyncLockTime time.Duration `long:"sync.locktime" env:"SYNC_LOCKTIME"  description:"Lock time until next sync (time.duration)" default:"5m"`
 
 	// azure settings

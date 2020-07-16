@@ -66,6 +66,7 @@ Application Options:
   -v, --verbose                              verbose mode [$VERBOSE]
       --log.json                             Switch log output to json format [$LOG_JSON]
       --sync.interval=                       Sync interval (time.duration) (default: 1h) [$SYNC_INTERVAL]
+      --sync.watch                           Sync using namespace watch [$SYNC_WATCH]
       --sync.locktime=                       Lock time until next sync (time.duration) (default: 5m) [$SYNC_LOCKTIME]
       --azure.subscription=                  Azure subscription ID [$AZURE_SUBSCRIPTION_ID]
       --kubeconfig=                          Kuberentes config path (should be empty if in-cluster) [$KUBECONFIG]

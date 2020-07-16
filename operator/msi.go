@@ -205,7 +205,10 @@ func (m *MsiOperator) initPrometheus() {
 
 func (m *MsiOperator) Start(syncInterval time.Duration) {
 	m.startIntervalSync(syncInterval)
-	m.startWatchSync()
+
+	if m.Conf.SyncWatch {
+		m.startWatchSync()
+	}
 }
 
 func (m *MsiOperator) startIntervalSync(syncInterval time.Duration) {

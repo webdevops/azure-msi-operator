@@ -5,7 +5,8 @@ WORKDIR /go/src/github.com/webdevops/azure-msi-operator
 # Get deps (cached)
 COPY ./go.mod /go/src/github.com/webdevops/azure-msi-operator
 COPY ./go.sum /go/src/github.com/webdevops/azure-msi-operator
-RUN go mod download
+COPY ./Makefile /go/src/github.com/webdevops/azure-msi-operator
+RUN make dependencies
 
 # Compile
 COPY ./ /go/src/github.com/webdevops/azure-msi-operator

@@ -1,6 +1,6 @@
 module github.com/webdevops/azure-msi-operator
 
-go 1.14
+go 1.15
 
 require (
 	github.com/Azure/azure-sdk-for-go v43.3.0+incompatible

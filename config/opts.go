@@ -10,6 +10,23 @@ type Opts struct {
 		LogJson bool `           long:"log.json"     env:"LOG_JSON" description:"Switch log output to json format"`
 	}
 
+	// instance
+	Instance struct {
+		Nodename  *string `long:"instance.nodename"    env:"INSTANCE_NODENAME"   description:"Name of node where autopilot is running"`
+		Namespace *string `long:"instance.namespace"   env:"INSTANCE_NAMESPACE"   description:"Name of namespace where autopilot is running"`
+		Pod       *string `long:"instance.pod"         env:"INSTANCE_POD"         description:"Name of pod where autopilot is running"`
+	}
+
+	K8s struct {
+		NodeLabelSelector string `long:"kube.node.labelselector"     env:"KUBE_NODE_LABELSELECTOR"     description:"Node Label selector which nodes should be checked"        default:""`
+	}
+
+	// lease
+	Lease struct {
+		Enabled bool   `long:"lease.enable"  env:"LEASE_ENABLE"  description:"Enable lease (leader election; enabled by default in docker images)"`
+		Name    string `long:"lease.name"    env:"LEASE_NAME"    description:"Name of lease lock"     default:"azure-msi-operator-leader"`
+	}
+
 	// Sync settings
 	SyncInterval time.Duration `long:"sync.interval" env:"SYNC_INTERVAL"  description:"Sync interval (time.duration)"  default:"1h"`
 	SyncWatch    bool          `long:"sync.watch"    env:"SYNC_WATCH"     description:"Sync using namespace watch"`

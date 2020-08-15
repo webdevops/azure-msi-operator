@@ -3,11 +3,11 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: azure-msi-operator
-  namespace: default
+  namespace: kube-system
   labels:
     app: azure-msi-operator
 spec:
-  replicas: 1
+  replicas: 2
   strategy:
     type: Recreate
   selector:
@@ -25,6 +25,7 @@ spec:
       containers:
         - name: azure-msi-operator
           image: webdevops/azure-msi-operator:latest
+          imagePullPolicy: Always
           env:
             #####################################
             # settings
@@ -73,6 +74,21 @@ spec:
                 secretKeyRef:
                   name: azure-msi-operator
                   key: AZURE_CLIENT_SECRET
+
+            #####################################
+            # Instance
+            - name: INSTANCE_NODENAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: INSTANCE_POD
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: INSTANCE_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           ports:
             - containerPort: 8080
               name: http-metrics

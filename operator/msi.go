@@ -10,6 +10,7 @@ import (
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
+	"github.com/operator-framework/operator-sdk/pkg/leader"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/webdevops/azure-msi-operator/config"
@@ -204,10 +205,34 @@ func (m *MsiOperator) initPrometheus() {
 }
 
 func (m *MsiOperator) Start(syncInterval time.Duration) {
-	m.startIntervalSync(syncInterval)
+	go func() {
+		m.leaderElect()
 
-	if m.Conf.SyncWatch {
-		m.startWatchSync()
+		m.startIntervalSync(syncInterval)
+
+		if m.Conf.SyncWatch {
+			m.startWatchSync()
+		}
+	}()
+}
+
+func (m *MsiOperator) leaderElect() {
+	if m.Conf.Lease.Enabled {
+		log.Info("trying to become leader")
+		if m.Conf.Instance.Pod != nil && os.Getenv("POD_NAME") == "" {
+			err := os.Setenv("POD_NAME", *m.Conf.Instance.Pod)
+			if err != nil {
+				log.Panic(err)
+			}
+		}
+
+		time.Sleep(15 * time.Second)
+		err := leader.Become(m.ctx, m.Conf.Lease.Name)
+		if err != nil {
+			log.Error(err, "Failed to retry for leader lock")
+			os.Exit(1)
+		}
+		log.Info("aquired leader lock, continue")
 	}
 }
 

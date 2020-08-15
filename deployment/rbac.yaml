@@ -3,7 +3,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: azure-msi-operator
-  namespace: default
+  namespace: kube-system
 ---
 # Define Role that allows operations on K8s pods/deployments
 kind: ClusterRole
@@ -22,6 +22,23 @@ rules:
     verbs: ["get", "list", "watch", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: azure-msi-operator
+  namespace: kube-system
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["azure-msi-operator-leader"]
+    verbs: ["get", "watch", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs:     ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
 # This cluster role binding allows anyone in the "manager" group to read secrets in any namespace.
 kind: ClusterRoleBinding
 metadata:
@@ -29,8 +46,22 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: azure-msi-operator
-    namespace: default
+    namespace: kube-system
 roleRef:
   kind: ClusterRole
   name: azure-msi-operator
   apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  namespace: kube-system
+  name: azure-msi-operator
+subjects:
+  - kind: ServiceAccount
+    namespace: kube-system
+    name: azure-msi-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: azure-msi-operator

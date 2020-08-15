@@ -65,16 +65,29 @@ Application Options:
       --debug                                debug mode [$DEBUG]
   -v, --verbose                              verbose mode [$VERBOSE]
       --log.json                             Switch log output to json format [$LOG_JSON]
+      --instance.nodename=                   Name of node where autopilot is running [$INSTANCE_NODENAME]
+      --instance.namespace=                  Name of namespace where autopilot is running [$INSTANCE_NAMESPACE]
+      --instance.pod=                        Name of pod where autopilot is running [$INSTANCE_POD]
+      --kube.node.labelselector=             Node Label selector which nodes should be checked
+                                             [$KUBE_NODE_LABELSELECTOR]
+      --lease.enable                         Enable lease (leader election; enabled by default in docker images)
+                                             [$LEASE_ENABLE]
+      --lease.name=                          Name of lease lock (default: azure-msi-operator-leader) [$LEASE_NAME]
       --sync.interval=                       Sync interval (time.duration) (default: 1h) [$SYNC_INTERVAL]
       --sync.watch                           Sync using namespace watch [$SYNC_WATCH]
       --sync.locktime=                       Lock time until next sync (time.duration) (default: 5m) [$SYNC_LOCKTIME]
       --azure.subscription=                  Azure subscription ID [$AZURE_SUBSCRIPTION_ID]
       --kubeconfig=                          Kuberentes config path (should be empty if in-cluster) [$KUBECONFIG]
-      --kubernetes.label.format=             Kubernetes label format (sprintf, if empty, labels are not set) (default: azure.k8s.io/%s) [$KUBERNETES_LABEL_FORMAT]
-      --azureidentity.namespaced             Set aadpodidentity.k8s.io/Behavior=namespaced annotation for AzureIdenity resources [$AZUREIDENTITY_NAMESPACED]
-      --azureidentity.template.namespace=    Golang template for Kubernetes namespace (default: {{index .Tags "k8snamespace"}}) [$AZUREIDENTITY_TEMPLATE_NAMESPACE]
-      --azureidentity.template.resourcename= Golang template for Kubernetes resource name (default: {{ .Name }}-{{ .ClientId }}) [$AZUREIDENTITY_TEMPLATE_RESOURCENAME]
-      --azureidentitybinding.sync            Sync AzureIdentity to AzureIdentityBinding using lookup label [$AZUREIDENTITYBINDING_SYNC]
+      --kubernetes.label.format=             Kubernetes label format (sprintf, if empty, labels are not set) (default:
+                                             azure.k8s.io/%s) [$KUBERNETES_LABEL_FORMAT]
+      --azureidentity.namespaced             Set aadpodidentity.k8s.io/Behavior=namespaced annotation for AzureIdenity
+                                             resources [$AZUREIDENTITY_NAMESPACED]
+      --azureidentity.template.namespace=    Golang template for Kubernetes namespace (default: {{index .Tags
+                                             "k8snamespace"}}) [$AZUREIDENTITY_TEMPLATE_NAMESPACE]
+      --azureidentity.template.resourcename= Golang template for Kubernetes resource name (default: {{ .Name }}-{{
+                                             .ClientId }}) [$AZUREIDENTITY_TEMPLATE_RESOURCENAME]
+      --azureidentitybinding.sync            Sync AzureIdentity to AzureIdentityBinding using lookup label
+                                             [$AZUREIDENTITYBINDING_SYNC]
       --bind=                                Server address (default: :8080) [$SERVER_BIND]
 
 Help Options:

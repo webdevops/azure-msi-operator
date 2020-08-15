@@ -19,7 +19,8 @@ RUN ./azure-msi-operator --help
 #############################################
 FROM gcr.io/distroless/static
 
-ENV LOG_JSON=1
+ENV LOG_JSON=1 \
+    LEASE_ENABLE=1
 
 COPY --from=build /go/src/github.com/webdevops/azure-msi-operator/azure-msi-operator /
 USER 1000

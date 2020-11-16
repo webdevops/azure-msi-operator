@@ -10,6 +10,7 @@ RUN make dependencies
 
 # Compile
 COPY ./ /go/src/github.com/webdevops/azure-msi-operator
+RUN make test
 RUN make lint
 RUN make build
 RUN ./azure-msi-operator --help

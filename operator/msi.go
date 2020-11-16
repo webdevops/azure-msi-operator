@@ -10,7 +10,7 @@ import (
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
-	"github.com/operator-framework/operator-sdk/pkg/leader"
+	"github.com/operator-framework/operator-lib/leader"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/webdevops/azure-msi-operator/config"

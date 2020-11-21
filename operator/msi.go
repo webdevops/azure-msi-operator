@@ -284,12 +284,12 @@ func (m *MsiOperator) run() {
 			log.Error(err)
 		}
 
-		subscriptionSyncDuration := time.Now().Sub(subscriptionStartTime)
+		subscriptionSyncDuration := time.Since(subscriptionStartTime)
 		m.prometheus.duration.WithLabelValues(*subscription.SubscriptionID).Set(subscriptionSyncDuration.Seconds())
 		m.prometheus.lastSync.WithLabelValues(*subscription.SubscriptionID).SetToCurrentTime()
 	}
 
-	overallDuration := time.Now().Sub(overallStartTime)
+	overallDuration := time.Since(overallStartTime)
 	log.Infof("finished after %s", overallDuration.String())
 
 	// lock next sync (keep up semaphore lock)

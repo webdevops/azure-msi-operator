@@ -19,12 +19,12 @@ const (
 var (
 	argparser *flags.Parser
 
+	opts config.Opts
+
 	// Git version information
 	gitCommit = "<unknown>"
 	gitTag    = "<unknown>"
 )
-
-var opts config.Opts
 
 func main() {
 	initArgparser()

@@ -24,5 +24,5 @@ ENV LOG_JSON=1 \
     LEASE_ENABLE=1
 
 COPY --from=build /go/src/github.com/webdevops/azure-msi-operator/azure-msi-operator /
-USER 1000
+USER 1000:1000
 ENTRYPOINT ["/azure-msi-operator"]

@@ -42,7 +42,7 @@ spec:
               value: "1"
 
             # enable sync of AzureIdentityBindings to AzureIdentity (based on labels; eg in development environments)
-            - name: AZUREIDENTITYBINDING_SYNC
+            - name: $AZUREIDENTITY_BINDING_SYNC
               value: "0"
 
             # overrides namespace detection, can also be hardcoded

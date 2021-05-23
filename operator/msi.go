@@ -62,8 +62,8 @@ type (
 		}
 
 		prometheus struct {
-			msiResourcs        *prometheus.GaugeVec
-			msiResourcsSuccess *prometheus.CounterVec
+			msiResource        *prometheus.GaugeVec
+			msiResourceSuccess *prometheus.CounterVec
 			msiResourceErrors  *prometheus.CounterVec
 			lastSync           *prometheus.GaugeVec
 			duration           *prometheus.GaugeVec
@@ -169,14 +169,14 @@ func (m *MsiOperator) initKubernetes() {
 }
 
 func (m *MsiOperator) initPrometheus() {
-	m.prometheus.msiResourcsSuccess = prometheus.NewCounterVec(
+	m.prometheus.msiResourceSuccess = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "azuremsi_sync_resources_success",
 			Help: "Azure MSI operator successfull resource syncs",
 		},
 		[]string{"subscription", "resource"},
 	)
-	prometheus.MustRegister(m.prometheus.msiResourcsSuccess)
+	prometheus.MustRegister(m.prometheus.msiResourceSuccess)
 
 	m.prometheus.msiResourceErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -260,7 +260,6 @@ func (m *MsiOperator) startWatchSync() {
 			for res := range watch.ResultChan() {
 				switch strings.ToLower(string(res.Type)) {
 				case "added":
-					//namespace := res.Object.(*unstructured.Unstructured)
 					m.run()
 				case "error":
 					break watchLoop
@@ -283,7 +282,6 @@ func (m *MsiOperator) startWatchSync() {
 			for res := range watch.ResultChan() {
 				switch strings.ToLower(string(res.Type)) {
 				case "added":
-					//namespace := res.Object.(*unstructured.Unstructured)
 					m.run()
 				case "error":
 					break watchLoop
@@ -305,7 +303,9 @@ func (m *MsiOperator) run() {
 	log.Info("starting sync")
 	overallStartTime := time.Now()
 
-	for _, subscription := range m.azure.subscriptionList {
+	for _, v := range m.azure.subscriptionList {
+		subscription := v
+
 		subscriptionStartTime := time.Now()
 
 		contextLogger := log.WithField("subscription", *subscription.DisplayName)
@@ -382,11 +382,11 @@ func (m *MsiOperator) upsertSubscription(contextLogger *log.Entry, subscription 
 					msiLogger.Error(err)
 					m.prometheus.msiResourceErrors.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
 				} else {
-					m.prometheus.msiResourcsSuccess.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
+					m.prometheus.msiResourceSuccess.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
 				}
 			} else {
 				// create
-				msiLogger.Infof("creating AzureIdentity %v/%v", k8sNamespace, k8sResourceName)
+				msiLogger.Infof("creating AzureIdentity \"%s/%s\"", k8sNamespace, k8sResourceName)
 
 				// object
 				k8sPodIdentity = &unstructured.Unstructured{
@@ -410,7 +410,7 @@ func (m *MsiOperator) upsertSubscription(contextLogger *log.Entry, subscription 
 					msiLogger.Error(err)
 					m.prometheus.msiResourceErrors.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
 				} else {
-					m.prometheus.msiResourcsSuccess.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
+					m.prometheus.msiResourceSuccess.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
 				}
 			}
 
@@ -465,7 +465,8 @@ func (m *MsiOperator) syncAzureIdentityToAzureIdentityBinding(contextLogger *log
 	}
 
 	if list != nil {
-		for _, azureIdentityBinding := range list.Items {
+		for _, item := range list.Items {
+			azureIdentityBinding := item
 			if err := unstructured.SetNestedField(azureIdentityBinding.Object, *msiInfo.KubernetesResourceName, "spec", "AzureIdentity"); err != nil {
 				contextLogger.Warnf("failed to set object \"kind\" for AzureIdentityBinding \"%s/%s\": %v", k8sNamespace, azureIdentityBinding.GetName(), err)
 				continue
@@ -477,7 +478,7 @@ func (m *MsiOperator) syncAzureIdentityToAzureIdentityBinding(contextLogger *log
 				m.prometheus.msiResourceErrors.WithLabelValues(*msiInfo.AzureSubscriptionId, K8sSchemeAzureIdentityBindingResourceSingular).Inc()
 			} else {
 				contextLogger.Infof("successfully synced AzureIdentity \"%[1]s/%[3]s\" to AzureIdentityBinding \"%[1]s/%[2]s\"", k8sNamespace, azureIdentityBinding.GetName(), *msiInfo.KubernetesResourceName)
-				m.prometheus.msiResourcsSuccess.WithLabelValues(*msiInfo.AzureSubscriptionId, K8sSchemeAzureIdentityBindingResourceSingular).Inc()
+				m.prometheus.msiResourceSuccess.WithLabelValues(*msiInfo.AzureSubscriptionId, K8sSchemeAzureIdentityBindingResourceSingular).Inc()
 			}
 		}
 	}

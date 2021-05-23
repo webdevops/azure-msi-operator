@@ -9,6 +9,7 @@ import (
 	"github.com/webdevops/azure-msi-operator/operator"
 	"net/http"
 	"os"
+	"runtime"
 )
 
 const (
@@ -28,13 +29,14 @@ var opts config.Opts
 func main() {
 	initArgparser()
 
-	log.Infof("starting Azure Managed Service Identity Operator v%s (%s; by %v)", gitTag, gitCommit, Author)
+	log.Infof("starting azure-msi-operator v%s (%s; %s; by %v)", gitTag, gitCommit, runtime.Version(), Author)
+	log.Info(string(opts.GetJson()))
 
 	msiOperator := operator.MsiOperator{
 		Conf: opts,
 	}
 	msiOperator.Init()
-	msiOperator.Start(opts.SyncInterval)
+	msiOperator.Start(opts.Sync.Interval)
 
 	log.Infof("starting http server on %s", opts.ServerBind)
 	startHttpServer()

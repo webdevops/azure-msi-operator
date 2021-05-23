@@ -15,6 +15,7 @@ ResourceGroup: barfoo
 Subscription: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ClientID: df398181-f42f-41b4-b791-b1d4572be315
 Tags:
+    # separate multiple namespaces with comma
     k8snamespace: test123
 
 ```
@@ -27,9 +28,9 @@ metadata:
   name: foobar-df398181-f42f-41b4-b791-b1d4572be315
   namespace: test123
   labels:
-    azure.k8s.io/msi-resourcename: foobar
-    azure.k8s.io/msi-resourcegroup: barfoo
-    azure.k8s.io/msi-subscription: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    msi.azure.k8s.io/name: foobar
+    msi.azure.k8s.io/resourcegroup: barfoo
+    msi.azure.k8s.io/subscription: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 spec:
   type: 0
   resourceID: /subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourcegroups/barfoo/providers/Microsoft.ManagedIdentity/userAssignedIdentities/foobar
@@ -44,9 +45,9 @@ metadata:
   labels:
     # used for sync AzureIdentity (eg. if recreated) to AzureIdentityBinding
     # if --azureidentitybinding.sync is used
-    azure.k8s.io/msi-resourcename: foobar
-    azure.k8s.io/msi-resourcegroup: barfoo
-    azure.k8s.io/msi-subscription: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    msi.azure.k8s.io/name: foobar
+    msi.azure.k8s.io/resourcegroup: barfoo
+    msi.azure.k8s.io/subscription: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
   name: foobar
   namespace: test123
 spec:

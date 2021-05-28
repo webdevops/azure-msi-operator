@@ -50,8 +50,8 @@ metadata:
   name: foobar
   namespace: test123
 spec:
-  AzureIdentity: foobar-df398181-f42f-41b4-b791-b1d4572be315
-  Selector: your-selector
+  azureIdentity: foobar-df398181-f42f-41b4-b791-b1d4572be315
+  selector: your-selector
 ```
 
 Configuration
@@ -102,8 +102,8 @@ for Azure API authentication (using ENV vars) see https://github.com/Azure/azure
 Templates
 ---------
 
-[golang templates](https://golang.org/pkg/text/template/) are used to offer flexible customization for 
-namespace (`--azureidentity.template.namespace`) and resourcename (`--azureidentity.template.resourcename`) 
+[golang templates](https://golang.org/pkg/text/template/) are used to offer flexible customization for
+namespace (`--azureidentity.template.namespace`) and resourcename (`--azureidentity.template.resourcename`)
 detection/creation, following information are available:
 ```
     Id               string

@@ -467,7 +467,7 @@ func (m *MsiOperator) syncAzureIdentityToAzureIdentityBinding(contextLogger *log
 	if list != nil {
 		for _, item := range list.Items {
 			azureIdentityBinding := item
-			if err := unstructured.SetNestedField(azureIdentityBinding.Object, *msiInfo.KubernetesResourceName, "spec", "AzureIdentity"); err != nil {
+			if err := unstructured.SetNestedField(azureIdentityBinding.Object, *msiInfo.KubernetesResourceName, "spec", "azureIdentity"); err != nil {
 				contextLogger.Warnf("failed to set object \"kind\" for AzureIdentityBinding \"%s/%s\": %v", k8sNamespace, azureIdentityBinding.GetName(), err)
 				continue
 			}
@@ -582,7 +582,7 @@ func (m *MsiOperator) applyMsiToK8sObject(msi *msi.Identity, k8sResource *unstru
 	}
 
 	// settings
-	if err := unstructured.SetNestedField(k8sResource.Object, "0", "spec", "type"); err != nil {
+	if err := unstructured.SetNestedField(k8sResource.Object, 0, "spec", "type"); err != nil {
 		return fmt.Errorf("failed to set spec.type value: %v", err)
 	}
 

@@ -582,7 +582,8 @@ func (m *MsiOperator) applyMsiToK8sObject(msi *msi.Identity, k8sResource *unstru
 	}
 
 	// settings
-	if err := unstructured.SetNestedField(k8sResource.Object, 0, "spec", "type"); err != nil {
+	msiType := int64(0)
+	if err := unstructured.SetNestedField(k8sResource.Object, msiType, "spec", "type"); err != nil {
 		return fmt.Errorf("failed to set spec.type value: %v", err)
 	}
 

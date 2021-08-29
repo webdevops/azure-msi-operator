@@ -16,7 +16,7 @@ type Opts struct {
 
 	// instance
 	Instance struct {
-		Nodename  *string `long:"instance.nodename"    env:"INSTANCE_NODENAME"   description:"Name of node where autopilot is running"`
+		Nodename  *string `long:"instance.nodename"    env:"INSTANCE_NODENAME"    description:"Name of node where autopilot is running"`
 		Namespace *string `long:"instance.namespace"   env:"INSTANCE_NAMESPACE"   description:"Name of namespace where autopilot is running"`
 		Pod       *string `long:"instance.pod"         env:"INSTANCE_POD"         description:"Name of pod where autopilot is running"`
 	}
@@ -42,8 +42,8 @@ type Opts struct {
 
 	// kubernetes settings
 	Kubernetes struct {
-		Config          string   `long:"kubeconfig" env:"KUBECONFIG"  description:"Kuberentes config path (should be empty if in-cluster)"`
-		LabelFormat     string   `long:"kubernetes.label.format" env:"KUBERNETES_LABEL_FORMAT"  description:"Kubernetes label format (sprintf, if empty, labels are not set)" default:"msi.azure.k8s.io/%s"`
+		Config          string   `long:"kubeconfig" env:"KUBECONFIG"                                                 description:"Kuberentes config path (should be empty if in-cluster)"`
+		LabelFormat     string   `long:"kubernetes.label.format" env:"KUBERNETES_LABEL_FORMAT"                       description:"Kubernetes label format (sprintf, if empty, labels are not set)" default:"msi.azure.k8s.io/%s"`
 		NamespaceIgnore []string `long:"kubernetes.namespace.ignore" env:"KUBERNETES_NAMESPACE_IGNORE" env-delim:" " description:"Do not not maintain these namespaces" default:"kube-system" default:"kube-public" default:"default" default:"gatekeeper-system" default:"istio-system"` //nolint:golint,staticcheck
 	}
 

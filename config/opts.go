@@ -53,6 +53,13 @@ type Opts struct {
 		TemplateNamespace    string `long:"azureidentity.template.namespace"     env:"AZUREIDENTITY_TEMPLATE_NAMESPACE"     description:"Golang template for Kubernetes namespace" default:"{{index .Tags \"k8snamespace\"}}"`
 		TemplateResourceName string `long:"azureidentity.template.resourcename"  env:"AZUREIDENTITY_TEMPLATE_RESOURCENAME"  description:"Golang template for Kubernetes resource name" default:"{{ .Name }}-{{ .ClientId }}"`
 		BindingSync          bool   `long:"azureidentity.binding.sync"           env:"AZUREIDENTITY_BINDING_SYNC"           description:"Sync AzureIdentity to AzureIdentityBinding using lookup label"`
+
+		Expiry struct {
+			Enable     bool          `long:"azureidentity.expiry"             env:"AZUREIDENTITY_EXPIRY"              description:"Enable setting of expiry for removal of old AzureIdentity resources (use with hjacobs/kube-janitor)"`
+			Annotation string        `long:"azureidentity.expiry.annotation"  env:"AZUREIDENTITY_EXPIRY_ANNOTATION"   description:"Name of expiry annotation" default:"janitor/expires"`
+			Duration   time.Duration `long:"azureidentity.expiry.duration"    env:"AZUREIDENTITY_EXPIRY_DURATION"     description:"Duration of expiry value (time.Duration)" default:"2190h"`
+			TimeFormat string        `long:"azureidentity.expiry.timeformat"  env:"AZUREIDENTITY_EXPIRY_TIMEFORMAT"   description:"Format of absolute time" default:"2006-01-02"`
+		}
 	}
 
 	// server settings

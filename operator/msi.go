@@ -402,7 +402,6 @@ func (m *MsiOperator) upsert(namespaceFilter string, syncAzureIdentity, syncAzur
 				continue
 			}
 
-
 			// add k8s info to log
 			msiLogger = msiLogger.WithFields(log.Fields{
 				"k8sNamespace": k8sNamespace,
@@ -661,6 +660,14 @@ func (m *MsiOperator) applyMsiToK8sObject(msi *msi.Identity, k8sResource *unstru
 		}
 	} else {
 		unstructured.RemoveNestedField(k8sResource.Object, "metadata", "annotations", "aadpodidentity.k8s.io/Behavior")
+	}
+
+	// ttl annotation
+	if m.Conf.AzureMsi.Expiry.Enable {
+		expiryDate := time.Now().UTC().Add(m.Conf.AzureMsi.Expiry.Duration).Format(m.Conf.AzureMsi.Expiry.TimeFormat)
+		if err := unstructured.SetNestedField(k8sResource.Object, expiryDate, "metadata", "annotations", m.Conf.AzureMsi.Expiry.Annotation); err != nil {
+			return fmt.Errorf("failed to set metadata.annotations[aadpodidentity.k8s.io/Behavior] value: %v", err)
+		}
 	}
 
 	// labels

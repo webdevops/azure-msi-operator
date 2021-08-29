@@ -139,12 +139,7 @@ func (m *MsiOperator) initAzure() {
 	}
 
 	// try to get cloud name, defaults to public cloud name
-	azureEnvName := azure.PublicCloud.Name
-	if env := os.Getenv("AZURE_ENVIRONMENT"); env != "" {
-		azureEnvName = env
-	}
-
-	m.azure.environment, err = azure.EnvironmentFromName(azureEnvName)
+	m.azure.environment, err = azure.EnvironmentFromName(m.Conf.Azure.Environment)
 	if err != nil {
 		panic(err)
 	}

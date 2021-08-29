@@ -25,6 +25,7 @@ Features
 - allows to configure the name of `AzureIdentity` and namespace settings
 - support expiry of `AzureIdentity` resources (use (hjacobs/kube-janitor)[https://codeberg.org/hjacobs/kube-janitor])
 - leader election support (allows to run the operator multiple times with fast handover)
+- supports `Namespace` creation and `AzureIdentityBinding` creating and modification watch in Kubernetes (allows fast and intelligent sync)
 - exposes Prometheus metrics
 
 Configuration

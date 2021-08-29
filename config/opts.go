@@ -46,13 +46,16 @@ type Opts struct {
 		NamespaceIgnore []string `long:"kubernetes.namespace.ignore" env:"KUBERNETES_NAMESPACE_IGNORE" env-delim:" " description:"Do not not maintain these namespaces" default:"kube-system" default:"kube-public" default:"default" default:"gatekeeper-system" default:"istio-system"` //nolint:golint,staticcheck
 	}
 
-	// AzureIdentityBinding
-	AzureMsi struct {
+	// AzureIdentity
+	AzureIdentity struct {
 		// Msi settings
 		Namespaced           bool   `long:"azureidentity.namespaced"             env:"AZUREIDENTITY_NAMESPACED"             description:"Set aadpodidentity.k8s.io/Behavior=namespaced annotation for AzureIdenity resources"`
 		TemplateNamespace    string `long:"azureidentity.template.namespace"     env:"AZUREIDENTITY_TEMPLATE_NAMESPACE"     description:"Golang template for Kubernetes namespace" default:"{{index .Tags \"k8snamespace\"}}"`
 		TemplateResourceName string `long:"azureidentity.template.resourcename"  env:"AZUREIDENTITY_TEMPLATE_RESOURCENAME"  description:"Golang template for Kubernetes resource name" default:"{{ .Name }}-{{ .ClientId }}"`
-		BindingSync          bool   `long:"azureidentity.binding.sync"           env:"AZUREIDENTITY_BINDING_SYNC"           description:"Sync AzureIdentity to AzureIdentityBinding using lookup label"`
+
+		Binding struct {
+			Sync bool `long:"azureidentity.binding.sync"  env:"AZUREIDENTITY_BINDING_SYNC"  description:"Sync AzureIdentity to AzureIdentityBinding using lookup label"`
+		}
 
 		Expiry struct {
 			Enable     bool          `long:"azureidentity.expiry"             env:"AZUREIDENTITY_EXPIRY"              description:"Enable setting of expiry for removal of old AzureIdentity resources (use with hjacobs/kube-janitor)"`

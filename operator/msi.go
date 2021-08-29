@@ -92,13 +92,13 @@ func (m *MsiOperator) Init() {
 	m.initKubernetes()
 	m.initPrometheus()
 
-	if t, err := template.New("msiResourceName").Parse(m.Conf.AzureMsi.TemplateResourceName); err == nil {
+	if t, err := template.New("msiResourceName").Parse(m.Conf.AzureIdentity.TemplateResourceName); err == nil {
 		m.msi.resourceNameTemplate = t
 	} else {
 		panic(err)
 	}
 
-	if t, err := template.New("msiNamespace").Parse(m.Conf.AzureMsi.TemplateNamespace); err == nil {
+	if t, err := template.New("msiNamespace").Parse(m.Conf.AzureIdentity.TemplateNamespace); err == nil {
 		m.msi.namespaceTemplate = t
 	} else {
 		panic(err)
@@ -417,7 +417,7 @@ func (m *MsiOperator) upsert(namespaceFilter string, syncAzureIdentity, syncAzur
 			}
 
 			// sync AzureIdentityBinding
-			if syncAzureIdentityBinding && m.Conf.AzureMsi.BindingSync {
+			if syncAzureIdentityBinding && m.Conf.AzureIdentity.Binding.Sync {
 				msiLogger.Debugf("sync AzureIdentityBinding for AzureIdentity %v/%v", k8sNamespace, k8sResourceName)
 				err := m.syncAzureIdentityToAzureIdentityBinding(msiLogger, msiResource, k8sNamespace)
 				if err != nil {
@@ -654,7 +654,7 @@ func (m *MsiOperator) applyMsiToK8sObject(msi *msi.Identity, k8sResource *unstru
 	}
 
 	// annotations
-	if m.Conf.AzureMsi.Namespaced {
+	if m.Conf.AzureIdentity.Namespaced {
 		if err := unstructured.SetNestedField(k8sResource.Object, "namespaced", "metadata", "annotations", "aadpodidentity.k8s.io/Behavior"); err != nil {
 			return fmt.Errorf("failed to set metadata.annotations[aadpodidentity.k8s.io/Behavior] value: %v", err)
 		}
@@ -663,9 +663,9 @@ func (m *MsiOperator) applyMsiToK8sObject(msi *msi.Identity, k8sResource *unstru
 	}
 
 	// ttl annotation
-	if m.Conf.AzureMsi.Expiry.Enable {
-		expiryDate := time.Now().UTC().Add(m.Conf.AzureMsi.Expiry.Duration).Format(m.Conf.AzureMsi.Expiry.TimeFormat)
-		if err := unstructured.SetNestedField(k8sResource.Object, expiryDate, "metadata", "annotations", m.Conf.AzureMsi.Expiry.Annotation); err != nil {
+	if m.Conf.AzureIdentity.Expiry.Enable {
+		expiryDate := time.Now().UTC().Add(m.Conf.AzureIdentity.Expiry.Duration).Format(m.Conf.AzureIdentity.Expiry.TimeFormat)
+		if err := unstructured.SetNestedField(k8sResource.Object, expiryDate, "metadata", "annotations", m.Conf.AzureIdentity.Expiry.Annotation); err != nil {
 			return fmt.Errorf("failed to set metadata.annotations[aadpodidentity.k8s.io/Behavior] value: %v", err)
 		}
 	}

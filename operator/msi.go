@@ -47,9 +47,10 @@ const (
 
 type (
 	MsiOperator struct {
-		Conf config.Opts
-		ctx  context.Context
-		lock *semaphore.Weighted
+		Conf       config.Opts
+		ctx        context.Context
+		runLock    *semaphore.Weighted
+		upsertLock *semaphore.Weighted
 
 		kubernetes struct {
 			client dynamic.Interface
@@ -59,6 +60,10 @@ type (
 			environment      azure.Environment
 			authorizer       autorest.Authorizer
 			subscriptionList []subscriptions.Subscription
+		}
+
+		serviceDiscovery struct {
+			msi *MsiResourceList
 		}
 
 		prometheus struct {
@@ -74,21 +79,14 @@ type (
 			namespaceTemplate    *template.Template
 		}
 	}
-
-	MsiResourceInfo struct {
-		Msi                    *msi.Identity
-		AzureResourceId        *string
-		AzureResourceName      *string
-		AzureResourceGroup     *string
-		AzureSubscriptionId    *string
-		KubernetesResourceName *string
-		KubernetesNamespace    []string
-	}
 )
 
 func (m *MsiOperator) Init() {
 	m.ctx = context.Background()
-	m.lock = semaphore.NewWeighted(1)
+	m.runLock = semaphore.NewWeighted(1)
+	m.upsertLock = semaphore.NewWeighted(1)
+
+	m.serviceDiscovery.msi = NewMsiResourceList()
 
 	m.initAzure()
 	m.initKubernetes()
@@ -210,6 +208,7 @@ func (m *MsiOperator) Start(syncInterval time.Duration) {
 	go func() {
 		m.leaderElect()
 
+		m.run()
 		m.startIntervalSync(syncInterval)
 
 		if m.Conf.Sync.Watch {
@@ -241,13 +240,14 @@ func (m *MsiOperator) leaderElect() {
 func (m *MsiOperator) startIntervalSync(syncInterval time.Duration) {
 	go func() {
 		for {
-			m.run()
 			time.Sleep(syncInterval)
+			m.run()
 		}
 	}()
 }
 
 func (m *MsiOperator) startWatchSync() {
+	// Namespace (create only) watch
 	go func() {
 		for {
 			gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "namespaces"}
@@ -257,19 +257,24 @@ func (m *MsiOperator) startWatchSync() {
 			}
 
 		watchLoop:
-			for res := range watch.ResultChan() {
-				switch strings.ToLower(string(res.Type)) {
+			for event := range watch.ResultChan() {
+				switch strings.ToLower(string(event.Type)) {
 				case "added":
-					m.run()
+					if obj, ok := event.Object.(*unstructured.Unstructured); ok {
+						if namespace := obj.GetName(); namespace != "" {
+							m.upsert(namespace, true, false)
+						}
+					}
 				case "error":
 					break watchLoop
 				}
 			}
 
-			log.Info("restarting namespace watch")
+			log.Info("restarting Namespace watch")
 		}
 	}()
 
+	// AzureIdentityBinding watch
 	go func() {
 		for {
 			gvr := schema.GroupVersionResource{Group: K8sSchemeAzureIdentityBindingGroup, Version: K8sSchemeAzureIdentityBindingVersion, Resource: K8sSchemeAzureIdentityBindingResourcePlural}
@@ -279,10 +284,14 @@ func (m *MsiOperator) startWatchSync() {
 			}
 
 		watchLoop:
-			for res := range watch.ResultChan() {
-				switch strings.ToLower(string(res.Type)) {
-				case "added":
-					m.run()
+			for event := range watch.ResultChan() {
+				switch strings.ToLower(string(event.Type)) {
+				case "added", "modified":
+					if obj, ok := event.Object.(*unstructured.Unstructured); ok {
+						if namespace := obj.GetNamespace(); namespace != "" {
+							m.upsert(namespace, false, true)
+						}
+					}
 				case "error":
 					break watchLoop
 				}
@@ -294,15 +303,28 @@ func (m *MsiOperator) startWatchSync() {
 }
 
 func (m *MsiOperator) run() {
-	if !m.lock.TryAcquire(1) {
+	if !m.runLock.TryAcquire(1) {
 		// already running
 		return
 	}
-	defer m.lock.Release(1)
+	defer m.runLock.Release(1)
 
-	log.Info("starting sync")
+	log.Info("starting ServiceDiscovery")
 	overallStartTime := time.Now()
 
+	if err := m.updateAzureMsiList(); err != nil {
+		log.Errorf("failed to update Azure MSI list: %v", err)
+		return
+	}
+
+	m.upsert("", true, true)
+
+	overallDuration := time.Since(overallStartTime)
+	log.Infof("finished after %s", overallDuration.String())
+}
+
+func (m *MsiOperator) updateAzureMsiList() error {
+	m.serviceDiscovery.msi.Clean()
 	for _, v := range m.azure.subscriptionList {
 		subscription := v
 
@@ -310,10 +332,20 @@ func (m *MsiOperator) run() {
 
 		contextLogger := log.WithField("subscription", *subscription.DisplayName)
 
-		contextLogger.Infof("sync Azure Subscription \"%s\" (%s)", to.String(subscription.DisplayName), to.String(subscription.SubscriptionID))
-		err := m.upsertSubscription(contextLogger, &subscription)
+		contextLogger.Infof("running MSI servicediscovery in Azure Subscription \"%s\" (%s)", to.String(subscription.DisplayName), to.String(subscription.SubscriptionID))
+		resourceList, err := m.fetchAzureMsiList(&subscription)
 		if err != nil {
-			log.Error(err)
+			return err
+		}
+
+		for _, msiResource := range resourceList {
+			msiInfo, err := m.generateMsiKubernetesResourceInfo(msiResource)
+			if err != nil {
+				contextLogger.Error(err)
+				continue
+			}
+
+			m.serviceDiscovery.msi.Add(msiInfo)
 		}
 
 		subscriptionSyncDuration := time.Since(subscriptionStartTime)
@@ -321,105 +353,132 @@ func (m *MsiOperator) run() {
 		m.prometheus.lastSync.WithLabelValues(*subscription.SubscriptionID).SetToCurrentTime()
 	}
 
-	overallDuration := time.Since(overallStartTime)
-	log.Infof("finished after %s", overallDuration.String())
+	m.serviceDiscovery.msi.Commit()
 
-	// lock next sync (keep up semaphore lock)
-	time.Sleep(m.Conf.Sync.LockTime)
+	return nil
 }
 
-func (m *MsiOperator) upsertSubscription(contextLogger *log.Entry, subscription *subscriptions.Subscription) error {
-	msiList, err := m.getAzureMsiList(subscription)
-	if err != nil {
-		return err
+func (m *MsiOperator) upsert(namespaceFilter string, syncAzureIdentity, syncAzureIdentityBinding bool) bool {
+	if !m.upsertLock.TryAcquire(1) {
+		// already running
+		return false
+	}
+	defer func() {
+		go func() {
+			// lock next sync (keep up semaphore lock)
+			time.Sleep(m.Conf.Sync.LockTime)
+			m.upsertLock.Release(1)
+		}()
+	}()
+
+	if namespaceFilter == "" {
+		log.Info("starting upsert for cluster")
+	} else {
+		log.Infof("starting upsert for namespace %v", namespaceFilter)
 	}
 
-	gvr := schema.GroupVersionResource{Group: K8sSchemeAzureIdentityGroup, Version: K8sSchemeAzureIdentityVersion, Resource: K8sSchemeAzureIdentityResourcePlural}
-	for _, msiResource := range msiList {
-		msiInfo, err := m.generateMsiKubernetesResourceInfo(msiResource)
-		if err != nil {
-			contextLogger.Error(err)
-			continue
-		}
+	for _, msiResource := range m.serviceDiscovery.msi.GetList() {
+		resourceId := to.String(msiResource.AzureResourceId)
 
 		// add resource to log
-		msiLogger := contextLogger.WithFields(log.Fields{
-			"resource": to.String(msiInfo.AzureResourceId),
+		msiLogger := log.WithFields(log.Fields{
+			"resource": resourceId,
 		})
 
 		// check if namespace/resource was found
-		if msiInfo.KubernetesNamespace == nil {
-			msiLogger.Debugf("unable to generate Kubernetes namespace name for Azure MSI %v", to.String(msiResource.ID))
+		if msiResource.KubernetesNamespace == nil {
+			msiLogger.Debugf("unable to generate Kubernetes namespace name for Azure MSI %v", resourceId)
 			continue
 		}
 
-		if msiInfo.KubernetesResourceName == nil {
-			msiLogger.Debugf("unable to generate Kubernetes resource name for Azure MSI %v", to.String(msiResource.ID))
+		if msiResource.KubernetesResourceName == nil {
+			msiLogger.Debugf("unable to generate Kubernetes resource name for Azure MSI %v", resourceId)
 			continue
 		}
 
-		k8sResourceName := *msiInfo.KubernetesResourceName
+		k8sResourceName := *msiResource.KubernetesResourceName
+		for _, k8sNamespace := range msiResource.KubernetesNamespace {
+			if namespaceFilter != "" && k8sNamespace != namespaceFilter {
+				continue
+			}
 
-		for _, k8sNamespace := range msiInfo.KubernetesNamespace {
+
 			// add k8s info to log
 			msiLogger = msiLogger.WithFields(log.Fields{
 				"k8sNamespace": k8sNamespace,
-				"k8sResource":  k8sResourceName,
+				"k8sResource":  *msiResource.KubernetesResourceName,
 			})
 
-			k8sPodIdentity, _ := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).Get(m.ctx, k8sResourceName, metav1.GetOptions{})
-			if k8sPodIdentity != nil {
-				// update
-				msiLogger.Infof("updating AzureIdentity %v/%v", k8sNamespace, k8sResourceName)
-
-				if err := m.applyMsiToK8sObject(msiResource, k8sPodIdentity); err != nil {
-					msiLogger.Error(err)
-					continue
-				}
-
-				_, err := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).Update(m.ctx, k8sPodIdentity, metav1.UpdateOptions{})
-				if err != nil {
-					msiLogger.Error(err)
-					m.prometheus.msiResourceErrors.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
-				} else {
-					m.prometheus.msiResourceSuccess.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
-				}
-			} else {
-				// create
-				msiLogger.Infof("creating AzureIdentity \"%s/%s\"", k8sNamespace, k8sResourceName)
-
-				// object
-				k8sPodIdentity = &unstructured.Unstructured{
-					Object: map[string]interface{}{
-						"metadata": map[string]interface{}{
-							"name":        k8sResourceName,
-							"annotations": map[string]interface{}{},
-							"labels":      map[string]interface{}{},
-						},
-						"spec": map[string]interface{}{},
-					},
-				}
-
-				if err := m.applyMsiToK8sObject(msiResource, k8sPodIdentity); err != nil {
-					msiLogger.Error(err)
-					continue
-				}
-
-				_, err := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).Create(m.ctx, k8sPodIdentity, metav1.CreateOptions{})
-				if err != nil {
-					msiLogger.Error(err)
-					m.prometheus.msiResourceErrors.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
-				} else {
-					m.prometheus.msiResourceSuccess.WithLabelValues(*subscription.SubscriptionID, K8sSchemeAzureIdentityResourceSingular).Inc()
+			// sync AzureIdentity
+			if syncAzureIdentity {
+				msiLogger.Debugf("sync AzureIdentity %v/%v", k8sNamespace, k8sResourceName)
+				if err := m.syncAzureIdentity(msiLogger, msiResource, k8sNamespace); err != nil {
+					msiLogger.Errorf("failed to sync AzureIdentity: %v", err)
 				}
 			}
 
-			if m.Conf.AzureMsi.BindingSync {
-				err := m.syncAzureIdentityToAzureIdentityBinding(msiLogger, msiInfo, k8sNamespace)
+			// sync AzureIdentityBinding
+			if syncAzureIdentityBinding && m.Conf.AzureMsi.BindingSync {
+				msiLogger.Debugf("sync AzureIdentityBinding for AzureIdentity %v/%v", k8sNamespace, k8sResourceName)
+				err := m.syncAzureIdentityToAzureIdentityBinding(msiLogger, msiResource, k8sNamespace)
 				if err != nil {
 					msiLogger.Error(err)
 				}
 			}
+		}
+	}
+
+	return true
+}
+
+func (m *MsiOperator) syncAzureIdentity(contextLogger *log.Entry, msiResource MsiResourceInfo, k8sNamespace string) error {
+	gvr := schema.GroupVersionResource{Group: K8sSchemeAzureIdentityGroup, Version: K8sSchemeAzureIdentityVersion, Resource: K8sSchemeAzureIdentityResourcePlural}
+	subscriptionId := to.String(msiResource.AzureSubscriptionId)
+	k8sResourceName := *msiResource.KubernetesResourceName
+
+	// sync AzureIdentity
+	azureIdentityObj, _ := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).Get(m.ctx, k8sResourceName, metav1.GetOptions{})
+	if azureIdentityObj != nil {
+		// update
+		contextLogger.Infof("updating AzureIdentity %v/%v", k8sNamespace, k8sResourceName)
+
+		if err := m.applyMsiToK8sObject(msiResource.Resource, azureIdentityObj); err != nil {
+			return err
+		}
+
+		_, err := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).Update(m.ctx, azureIdentityObj, metav1.UpdateOptions{})
+		if err != nil {
+			contextLogger.Error(err)
+			m.prometheus.msiResourceErrors.WithLabelValues(subscriptionId, K8sSchemeAzureIdentityResourceSingular).Inc()
+		} else {
+			m.prometheus.msiResourceSuccess.WithLabelValues(subscriptionId, K8sSchemeAzureIdentityResourceSingular).Inc()
+		}
+	} else {
+		// create
+		contextLogger.Infof("creating AzureIdentity \"%s/%s\"", k8sNamespace, k8sResourceName)
+
+		// object
+		azureIdentityObj = &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"name":        k8sResourceName,
+					"annotations": map[string]interface{}{},
+					"labels":      map[string]interface{}{},
+				},
+				"spec": map[string]interface{}{},
+			},
+		}
+
+		if err := m.applyMsiToK8sObject(msiResource.Resource, azureIdentityObj); err != nil {
+			return err
+		}
+
+		_, err := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).Create(m.ctx, azureIdentityObj, metav1.CreateOptions{})
+		if err != nil {
+			contextLogger.Error(err)
+			m.prometheus.msiResourceErrors.WithLabelValues(subscriptionId, K8sSchemeAzureIdentityResourceSingular).Inc()
+		} else {
+			m.prometheus.msiResourceSuccess.WithLabelValues(subscriptionId, K8sSchemeAzureIdentityResourceSingular).Inc()
 		}
 	}
 
@@ -489,6 +548,7 @@ func (m *MsiOperator) syncAzureIdentityToAzureIdentityBinding(contextLogger *log
 func (m *MsiOperator) generateMsiKubernetesResourceInfo(msi *msi.Identity) (msiInfo MsiResourceInfo, err error) {
 	msiInfo = MsiResourceInfo{
 		AzureResourceId: to.StringPtr(strings.ToLower(to.String(msi.ID))),
+		Resource:        msi,
 	}
 
 	resourceInfo, parseErr := azure.ParseResourceID(*msi.ID)
@@ -521,7 +581,6 @@ func (m *MsiOperator) generateMsiKubernetesResourceInfo(msi *msi.Identity) (msiI
 		Type:           to.String(msi.Type),
 	}
 
-	msiInfo.Msi = msi
 	msiInfo.AzureResourceName = to.StringPtr(strings.ToLower(resourceInfo.ResourceName))
 	msiInfo.AzureResourceGroup = to.StringPtr(strings.ToLower(resourceInfo.ResourceGroup))
 	msiInfo.AzureSubscriptionId = to.StringPtr(strings.ToLower(resourceInfo.SubscriptionID))
@@ -623,7 +682,7 @@ func (m *MsiOperator) applyMsiToK8sObject(msi *msi.Identity, k8sResource *unstru
 	return nil
 }
 
-func (m *MsiOperator) getAzureMsiList(subscription *subscriptions.Subscription) (ret []*msi.Identity, err error) {
+func (m *MsiOperator) fetchAzureMsiList(subscription *subscriptions.Subscription) (ret []*msi.Identity, err error) {
 	client := msi.NewUserAssignedIdentitiesClientWithBaseURI(m.azure.environment.ResourceManagerEndpoint, *subscription.SubscriptionID)
 	client.Authorizer = m.azure.authorizer
 

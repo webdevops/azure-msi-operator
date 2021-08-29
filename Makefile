@@ -13,6 +13,15 @@ all: build
 clean:
 	git clean -Xfd .
 
+.PHONY: recreate-go-mod
+recreate-go-mod:
+	rm -f go.mod go.sum
+	GO111MODULE=on go mod init  github.com/webdevops/azure-msi-operator
+	GO111MODULE=on go get k8s.io/client-go@v0.21.0
+	GO111MODULE=on go get -u github.com/Azure/azure-sdk-for-go/...
+	GO111MODULE=on go get
+	GO111MODULE=on go mod vendor
+
 .PHONY: build
 build:
 	CGO_ENABLED=0 go build -a -ldflags '$(LDFLAGS)' -o $(PROJECT_NAME) .

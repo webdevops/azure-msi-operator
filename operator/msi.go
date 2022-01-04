@@ -112,7 +112,14 @@ func (m *MsiOperator) initAzure() {
 	if err != nil {
 		panic(err)
 	}
-	subscriptionsClient := subscriptions.NewClient()
+
+	// try to get cloud name, defaults to public cloud name
+	m.azure.environment, err = azure.EnvironmentFromName(m.Conf.Azure.Environment)
+	if err != nil {
+		panic(err)
+	}
+
+	subscriptionsClient := subscriptions.NewClientWithBaseURI(m.azure.environment.ResourceManagerEndpoint)
 	subscriptionsClient.Authorizer = m.azure.authorizer
 
 	if len(m.Conf.Azure.Subscription) == 0 {
@@ -136,12 +143,6 @@ func (m *MsiOperator) initAzure() {
 			}
 			m.azure.subscriptionList = append(m.azure.subscriptionList, result)
 		}
-	}
-
-	// try to get cloud name, defaults to public cloud name
-	m.azure.environment, err = azure.EnvironmentFromName(m.Conf.Azure.Environment)
-	if err != nil {
-		panic(err)
 	}
 }
 

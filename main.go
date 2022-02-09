@@ -33,7 +33,8 @@ func main() {
 	log.Info(string(opts.GetJson()))
 
 	msiOperator := operator.MsiOperator{
-		Conf: opts,
+		Conf:      opts,
+		UserAgent: "azure-msi-operator/" + gitTag,
 	}
 	msiOperator.Init()
 	msiOperator.Start(opts.Sync.Interval)

@@ -7,13 +7,12 @@ require (
 	github.com/Azure/go-autorest/autorest v0.11.24
 	github.com/Azure/go-autorest/autorest/azure/auth v0.5.11
 	github.com/Azure/go-autorest/autorest/to v0.4.0
-	github.com/Azure/go-autorest/tracing v0.6.0
 	github.com/Azure/go-autorest/tracing/opencensus v0.1.0
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/operator-framework/operator-lib v0.10.0
 	github.com/prometheus/client_golang v1.12.1
 	github.com/sirupsen/logrus v1.8.1
-	github.com/webdevops/go-prometheus-common v0.0.0-20220209210040-06641f27ff7c
+	github.com/webdevops/go-prometheus-common v0.0.0-20220209212102-0841e032ebab
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	k8s.io/apimachinery v0.23.3
 	k8s.io/client-go v0.23.3
@@ -28,6 +27,7 @@ require (
 	github.com/Azure/go-autorest/autorest/date v0.3.0 // indirect
 	github.com/Azure/go-autorest/autorest/validation v0.3.1 // indirect
 	github.com/Azure/go-autorest/logger v0.2.1 // indirect
+	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/census-instrumentation/opencensus-proto v0.2.1 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect

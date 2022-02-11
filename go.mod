@@ -12,7 +12,7 @@ require (
 	github.com/operator-framework/operator-lib v0.10.0
 	github.com/prometheus/client_golang v1.12.1
 	github.com/sirupsen/logrus v1.8.1
-	github.com/webdevops/go-prometheus-common v0.0.0-20220209212102-0841e032ebab
+	github.com/webdevops/go-prometheus-common v0.0.0-20220211101814-4c9913788fe1
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	k8s.io/apimachinery v0.23.3
 	k8s.io/client-go v0.23.3
@@ -59,7 +59,7 @@ require (
 	golang.org/x/crypto v0.0.0-20220209155544-dad33157f4bf // indirect
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd // indirect
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
-	golang.org/x/sys v0.0.0-20220207234003-57398862261d // indirect
+	golang.org/x/sys v0.0.0-20220209214540-3681064d5158 // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20211116232009-f0f3c7e86c11 // indirect

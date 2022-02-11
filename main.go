@@ -7,6 +7,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/webdevops/azure-msi-operator/config"
 	"github.com/webdevops/azure-msi-operator/operator"
+	"github.com/webdevops/go-prometheus-common/azuretracing"
 	"net/http"
 	"os"
 	"runtime"
@@ -87,7 +88,7 @@ func startHttpServer() {
 	})
 
 	// prom metrics
-	http.Handle("/metrics", promhttp.Handler())
+	http.Handle("/metrics", azuretracing.RegisterAzureMetricAutoClean(promhttp.Handler()))
 
 	log.Fatal(http.ListenAndServe(opts.ServerBind, nil))
 }

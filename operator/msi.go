@@ -21,14 +21,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
-	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"text/template"
 	"time"
 
-	azureTracing "github.com/webdevops/go-prometheus-common/azure-tracing"
+	"github.com/webdevops/go-prometheus-common/azuretracing"
 
 	// azure sdk tracing
 	_ "github.com/Azure/go-autorest/tracing/opencensus"
@@ -116,8 +114,6 @@ func (m *MsiOperator) Init() {
 func (m *MsiOperator) initAzure() {
 	var err error
 
-	azureTracing.Enable()
-
 	// setup azure authorizer
 	m.azure.authorizer, err = auth.NewAuthorizerFromEnvironment()
 	if err != nil {
@@ -131,7 +127,7 @@ func (m *MsiOperator) initAzure() {
 	}
 
 	subscriptionsClient := subscriptions.NewClientWithBaseURI(m.azure.environment.ResourceManagerEndpoint)
-	subscriptionsClient.BaseClient.Client = m.decorateAzureClient(&subscriptionsClient.BaseClient.Client, "")
+	m.decorateAzureClient(&subscriptionsClient.BaseClient.Client)
 
 	if len(m.Conf.Azure.Subscription) == 0 {
 		// auto lookup subscriptions
@@ -712,7 +708,7 @@ func (m *MsiOperator) applyMsiToK8sObject(msi *msi.Identity, k8sResource *unstru
 
 func (m *MsiOperator) fetchAzureMsiList(subscription *subscriptions.Subscription) (ret []*msi.Identity, err error) {
 	client := msi.NewUserAssignedIdentitiesClientWithBaseURI(m.azure.environment.ResourceManagerEndpoint, *subscription.SubscriptionID)
-	client.BaseClient.Client = m.decorateAzureClient(&client.BaseClient.Client, *subscription.SubscriptionID)
+	m.decorateAzureClient(&client.BaseClient.Client)
 
 	list, azureErr := client.ListBySubscriptionComplete(m.ctx)
 	if azureErr != nil {
@@ -735,34 +731,11 @@ func (m *MsiOperator) labelName(name string) string {
 	return fmt.Sprintf(m.Conf.Kubernetes.LabelFormat, name)
 }
 
-func (m *MsiOperator) decorateAzureClient(client *autorest.Client, subscriptionId string) autorest.Client {
+func (m *MsiOperator) decorateAzureClient(client *autorest.Client) {
 	client.Authorizer = m.azure.authorizer
 	if err := client.AddToUserAgent(m.UserAgent); err != nil {
 		log.Panic(err)
 	}
 
-	apiQuotaMetric := func(r *http.Response, headerName string, labels prometheus.Labels) {
-		ratelimit := r.Header.Get(headerName)
-		if v, err := strconv.ParseInt(ratelimit, 10, 64); err == nil {
-			m.prometheus.apiQuota.With(labels).Set(float64(v))
-		}
-	}
-
-	client.ResponseInspector = func(p autorest.Responder) autorest.Responder {
-		return autorest.ResponderFunc(func(r *http.Response) error {
-
-			// subscription rate limits
-			apiQuotaMetric(r, "x-ms-ratelimit-remaining-subscription-reads", prometheus.Labels{"subscriptionID": subscriptionId, "scope": "subscription", "type": "read"})
-			apiQuotaMetric(r, "x-ms-ratelimit-remaining-subscription-resource-requests", prometheus.Labels{"subscriptionID": subscriptionId, "scope": "subscription", "type": "resource-requests"})
-			apiQuotaMetric(r, "x-ms-ratelimit-remaining-subscription-resource-entities-read", prometheus.Labels{"subscriptionID": subscriptionId, "scope": "subscription", "type": "resource-entities-read"})
-
-			// tenant rate limits
-			apiQuotaMetric(r, "x-ms-ratelimit-remaining-tenant-reads", prometheus.Labels{"subscriptionID": subscriptionId, "scope": "tenant", "type": "read"})
-			apiQuotaMetric(r, "x-ms-ratelimit-remaining-tenant-resource-requests", prometheus.Labels{"subscriptionID": subscriptionId, "scope": "tenant", "type": "resource-requests"})
-			apiQuotaMetric(r, "x-ms-ratelimit-remaining-tenant-resource-entities-read", prometheus.Labels{"subscriptionID": subscriptionId, "scope": "tenant", "type": "resource-entities-read"})
-			return nil
-		})
-	}
-
-	return *client
+	azuretracing.DecoreAzureAutoRest(client)
 }

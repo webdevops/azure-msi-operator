@@ -77,7 +77,6 @@ type (
 			msiResourceErrors  *prometheus.CounterVec
 			lastSync           *prometheus.GaugeVec
 			duration           *prometheus.GaugeVec
-			apiQuota           *prometheus.GaugeVec
 		}
 
 		msi struct {
@@ -206,19 +205,6 @@ func (m *MsiOperator) initPrometheus() {
 		[]string{"subscription"},
 	)
 	prometheus.MustRegister(m.prometheus.lastSync)
-
-	m.prometheus.apiQuota = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "azurerm_ratelimit",
-			Help: "Azure ResourceManager ratelimit",
-		},
-		[]string{
-			"subscriptionID",
-			"scope",
-			"type",
-		},
-	)
-	prometheus.MustRegister(m.prometheus.apiQuota)
 }
 
 func (m *MsiOperator) Start(syncInterval time.Duration) {

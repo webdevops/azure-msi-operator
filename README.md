@@ -1,5 +1,4 @@
-Operator for Azure Managed Service Identity in Kubernetes (for aad-pod-identity)
-================================================================================
+# Operator for Azure Managed Service Identity in Kubernetes (for aad-pod-identity)
 
 [![license](https://img.shields.io/github/license/webdevops/azure-msi-operator.svg)](https://github.com/webdevops/azure-msi-operator/blob/master/LICENSE)
 [![DockerHub](https://img.shields.io/badge/DockerHub-webdevops%2Fazure--msi--operator-blue)](https://hub.docker.com/r/webdevops/azure-msi-operator/)
@@ -17,8 +16,7 @@ It looks up the configured namespaces (default configuration) and syncs `AzureId
 Kubernetes namespace. Then it checks `AzureIdentityBinding` resources for labels to
 bind `AzureIdentity` and `AzureIdentityBinding` together in a secure way.
 
-Features
---------
+## Features
 
 - automatically creates and maintains `AzureIdentity` resources in Kubernetes
 - extracts Namespace from MSI tag resource (can be configured)
@@ -29,8 +27,7 @@ Features
 - supports `Namespace` creation and `AzureIdentityBinding` creating and modification watch in Kubernetes (allows fast and intelligent sync)
 - exposes Prometheus metrics
 
-Configuration
--------------
+## Usage
 
 ```
 Usage:
@@ -75,8 +72,7 @@ Help Options:
 
 for Azure API authentication (using ENV vars) see https://docs.microsoft.com/en-us/azure/developer/go/azure-sdk-authentication
 
-Example
--------
+## Example
 
 Creates and maintains `AzureIdentity` resources in Kubernetes in an automated and safe way when found in Azure:
 
@@ -129,8 +125,7 @@ spec:
   selector: your-selector
 ```
 
-Templates
----------
+## Templates
 
 [golang templates](https://golang.org/pkg/text/template/) are used to offer flexible customization for
 namespace (`--azureidentity.template.namespace`) and resourcename (`--azureidentity.template.resourcename`)
@@ -160,15 +155,13 @@ Examples :
       value: '{{index .Tags "namespace"}}'
 ```
 
-Cleanup/expiry
---------------
+## Cleanup/expiry
 
 This operator doesn't remove the `AzureIdentity` resources from your clusters to avoid any downtime because of eg. permissions
 issues in ServiceDiscovery.
 You can enable expiry annotations (`AZUREIDENTITY_EXPIRY`) and let them clean up with (hjacobs/kube-janitor)[https://codeberg.org/hjacobs/kube-janitor].
 
-Metrics
--------
+## Metrics
 
 | Metric                                         | Type         | Description                                                                           |
 |------------------------------------------------|--------------|---------------------------------------------------------------------------------------|
@@ -176,3 +169,36 @@ Metrics
 | `azuremsi_sync_duration`                       | Gauge        | Duration of last sync per Azure Subscription                                          |
 | `azuremsi_sync_resources_errors`               | Counter      | Number of errors while syncing                                                        |
 | `azuremsi_sync_resources_success`              | Counter      | Number of successfull syncs                                                           |
+
+## AzureTracing metrics
+
+(with 22.2.0 and later)
+
+Azuretracing metrics collects latency and latency from azure-sdk-for-go and creates metrics and is controllable using
+environment variables (eg. setting buckets, disabling metrics or disable autoreset).
+
+| Metric                                   | Description                                                                            |
+|------------------------------------------|----------------------------------------------------------------------------------------|
+| `azurerm_api_ratelimit`                  | Azure ratelimit metrics (only on /metrics, resets after query due to limited validity) |
+| `azurerm_api_request_*`                  | Azure request count and latency as histogram                                           |
+
+### Settings
+
+| Environment variable                     | Example                            | Description                                                    |
+|------------------------------------------|------------------------------------|----------------------------------------------------------------|
+| `METRIC_AZURERM_API_REQUEST_BUCKETS`     | `1, 2.5, 5, 10, 30, 60, 90, 120`   | Sets buckets for `azurerm_api_request` histogram metric        |
+| `METRIC_AZURERM_API_REQUEST_ENABLE`      | `false`                            | Enables/disables `azurerm_api_request_*` metric                |
+| `METRIC_AZURERM_API_REQUEST_LABELS`      | `apiEndpoint, method, statusCode`  | Controls labels of `azurerm_api_request_*` metric              |
+| `METRIC_AZURERM_API_RATELIMIT_ENABLE`    | `false`                            | Enables/disables `azurerm_api_ratelimit` metric                |
+| `METRIC_AZURERM_API_RATELIMIT_AUTORESET` | `false`                            | Enables/disables `azurerm_api_ratelimit` autoreset after fetch |
+
+
+| `azurerm_api_request` label | Status             | Description                                                                                              |
+|-----------------------------|--------------------|----------------------------------------------------------------------------------------------------------|
+| `apiEndpoint`               | enabled by default | hostname of endpoint (max 3 parts)                                                                       |
+| `routingRegion`             | enabled by default | detected region for API call, either routing region from Azure Management API or Azure resource location |
+| `subscriptionID`            | enabled by default | detected subscriptionID                                                                                  |
+| `tenantID`                  | enabled by default | detected tenantID (extracted from jwt auth token)                                                        |
+| `resourceProvider`          | enabled by default | detected Azure Management API provider                                                                   |
+| `method`                    | enabled by default | HTTP method                                                                                              |
+| `statusCode`                | enabled by default | HTTP status code                                                                                         |

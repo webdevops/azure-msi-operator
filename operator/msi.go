@@ -126,7 +126,7 @@ func (m *MsiOperator) initAzure() {
 	}
 
 	subscriptionsClient := subscriptions.NewClientWithBaseURI(m.azure.environment.ResourceManagerEndpoint)
-	m.decorateAzureClient(&subscriptionsClient.BaseClient.Client)
+	m.decorateAzureClient(&subscriptionsClient.Client)
 
 	if len(m.Conf.Azure.Subscription) == 0 {
 		// auto lookup subscriptions
@@ -694,7 +694,7 @@ func (m *MsiOperator) applyMsiToK8sObject(msi *msi.Identity, k8sResource *unstru
 
 func (m *MsiOperator) fetchAzureMsiList(subscription *subscriptions.Subscription) (ret []*msi.Identity, err error) {
 	client := msi.NewUserAssignedIdentitiesClientWithBaseURI(m.azure.environment.ResourceManagerEndpoint, *subscription.SubscriptionID)
-	m.decorateAzureClient(&client.BaseClient.Client)
+	m.decorateAzureClient(&client.Client)
 
 	list, azureErr := client.ListBySubscriptionComplete(m.ctx)
 	if azureErr != nil {
@@ -723,5 +723,5 @@ func (m *MsiOperator) decorateAzureClient(client *autorest.Client) {
 		log.Panic(err)
 	}
 
-	azuretracing.DecoreAzureAutoRest(client)
+	azuretracing.DecorateAzureAutoRestClient(client)
 }

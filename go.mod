@@ -12,7 +12,7 @@ require (
 	github.com/operator-framework/operator-lib v0.10.0
 	github.com/prometheus/client_golang v1.12.1
 	github.com/sirupsen/logrus v1.8.1
-	github.com/webdevops/go-prometheus-common v0.0.0-20220211101814-4c9913788fe1
+	github.com/webdevops/go-prometheus-common v0.0.0-20220214222004-cea8f38b44b7
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	k8s.io/apimachinery v0.23.3
 	k8s.io/client-go v0.23.3

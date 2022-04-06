@@ -27,7 +27,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/webdevops/go-prometheus-common/azuretracing"
+	"github.com/webdevops/go-common/prometheus/azuretracing"
 
 	// azure sdk tracing
 	_ "github.com/Azure/go-autorest/tracing/opencensus"

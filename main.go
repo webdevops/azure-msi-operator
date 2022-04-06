@@ -6,11 +6,13 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/jessevdk/go-flags"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
+	"github.com/webdevops/go-common/prometheus/azuretracing"
+
 	"github.com/webdevops/azure-msi-operator/config"
 	"github.com/webdevops/azure-msi-operator/operator"
-	"github.com/webdevops/go-prometheus-common/azuretracing"
 )
 
 const (

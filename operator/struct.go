@@ -1,8 +1,9 @@
 package operator
 
 import (
-	"github.com/Azure/azure-sdk-for-go/profiles/latest/msi/mgmt/msi"
 	"sync"
+
+	"github.com/Azure/azure-sdk-for-go/profiles/latest/msi/mgmt/msi"
 )
 
 type (

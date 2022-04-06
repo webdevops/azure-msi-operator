@@ -2,15 +2,15 @@ package main
 
 import (
 	"fmt"
-	"github.com/jessevdk/go-flags"
+	"net/http"
+	"os"
+	"runtime"
+
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"github.com/webdevops/azure-msi-operator/config"
 	"github.com/webdevops/azure-msi-operator/operator"
 	"github.com/webdevops/go-prometheus-common/azuretracing"
-	"net/http"
-	"os"
-	"runtime"
 )
 
 const (

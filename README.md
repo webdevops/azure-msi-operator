@@ -5,6 +5,8 @@
 [![Quay.io](https://img.shields.io/badge/Quay.io-webdevops%2Fazure--msi--operator-blue)](https://quay.io/repository/webdevops/azure-msi-operator)
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/azure-msi-operator)](https://artifacthub.io/packages/search?repo=azure-msi-operator)
 
+> ❗ **IMPORTANT**: Microsoft has deprecated [aad-pod-identity](https://github.com/Azure/aad-pod-identity) service, please switch to [azure-workload-identity](https://github.com/Azure/azure-workload-identity)
+
 Operator for Azure Managed Service Identity (MSI) in Kubernetes, requires [Azure aad-pod-identity service](https://github.com/Azure/aad-pod-identity)
 
 Why using this app?
@@ -48,23 +50,28 @@ Application Options:
       --azure.environment=                   Azure environment name (default: AZUREPUBLICCLOUD) [$AZURE_ENVIRONMENT]
       --azure.subscription=                  Azure subscription ID [$AZURE_SUBSCRIPTION_ID]
       --kubeconfig=                          Kuberentes config path (should be empty if in-cluster) [$KUBECONFIG]
-      --kubernetes.label.format=             Kubernetes label format (sprintf, if empty, labels are not set) (default: msi.azure.k8s.io/%s)
-                                             [$KUBERNETES_LABEL_FORMAT]
-      --kubernetes.namespace.ignore=         Do not not maintain these namespaces (default: kube-system, kube-public, default, gatekeeper-system,
-                                             istio-system) [$KUBERNETES_NAMESPACE_IGNORE]
+      --kubernetes.label.format=             Kubernetes label format (sprintf, if empty, labels are not set) (default:
+                                             msi.azure.k8s.io/%s) [$KUBERNETES_LABEL_FORMAT]
+      --kubernetes.namespace.ignore=         Do not not maintain these namespaces (default: kube-system, kube-public, default,
+                                             gatekeeper-system, istio-system) [$KUBERNETES_NAMESPACE_IGNORE]
       --azureidentity.namespaced             Set aadpodidentity.k8s.io/Behavior=namespaced annotation for AzureIdenity resources
                                              [$AZUREIDENTITY_NAMESPACED]
       --azureidentity.template.namespace=    Golang template for Kubernetes namespace (default: {{index .Tags "k8snamespace"}})
                                              [$AZUREIDENTITY_TEMPLATE_NAMESPACE]
       --azureidentity.template.resourcename= Golang template for Kubernetes resource name (default: {{ .Name }}-{{ .ClientId }})
                                              [$AZUREIDENTITY_TEMPLATE_RESOURCENAME]
-      --azureidentity.binding.sync           Sync AzureIdentity to AzureIdentityBinding using lookup label [$AZUREIDENTITY_BINDING_SYNC]
-      --azureidentity.expiry                 Enable setting of expiry for removal of old AzureIdentity resources (use with hjacobs/kube-janitor)
-                                             [$AZUREIDENTITY_EXPIRY]
-      --azureidentity.expiry.annotation=     Name of expiry annotation (default: janitor/expires) [$AZUREIDENTITY_EXPIRY_ANNOTATION]
-      --azureidentity.expiry.duration=       Duration of expiry value (time.Duration) (default: 2190h) [$AZUREIDENTITY_EXPIRY_DURATION]
+      --azureidentity.binding.sync           Sync AzureIdentity to AzureIdentityBinding using lookup label
+                                             [$AZUREIDENTITY_BINDING_SYNC]
+      --azureidentity.expiry                 Enable setting of expiry for removal of old AzureIdentity resources (use with
+                                             hjacobs/kube-janitor) [$AZUREIDENTITY_EXPIRY]
+      --azureidentity.expiry.annotation=     Name of expiry annotation (default: janitor/expires)
+                                             [$AZUREIDENTITY_EXPIRY_ANNOTATION]
+      --azureidentity.expiry.duration=       Duration of expiry value (time.Duration) (default: 2190h)
+                                             [$AZUREIDENTITY_EXPIRY_DURATION]
       --azureidentity.expiry.timeformat=     Format of absolute time (default: 2006-01-02) [$AZUREIDENTITY_EXPIRY_TIMEFORMAT]
-      --bind=                                Server address (default: :8080) [$SERVER_BIND]
+      --server.bind=                         Server address (default: :8080) [$SERVER_BIND]
+      --server.timeout.read=                 Server read timeout (default: 5s) [$SERVER_TIMEOUT_READ]
+      --server.timeout.write=                Server write timeout (default: 10s) [$SERVER_TIMEOUT_WRITE]
 
 Help Options:
   -h, --help                                 Show this help message

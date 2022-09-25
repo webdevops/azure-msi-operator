@@ -18,7 +18,6 @@ import (
 	"github.com/operator-framework/operator-lib/leader"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
-	"github.com/webdevops/azure-msi-operator/config"
 	"golang.org/x/sync/semaphore"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -26,6 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/webdevops/azure-msi-operator/config"
 
 	"github.com/webdevops/go-common/prometheus/azuretracing"
 
@@ -523,7 +524,7 @@ func (m *MsiOperator) syncAzureIdentityToAzureIdentityBinding(contextLogger *log
 
 	list, err := m.kubernetes.client.Resource(gvr).Namespace(k8sNamespace).List(m.ctx, listOpts)
 	if err != nil {
-		return fmt.Errorf("failed to fetch AzureIdentityBinding from namespace \"%s\": %v", k8sNamespace, err)
+		return fmt.Errorf("failed to fetch AzureIdentityBinding from namespace \"%s\": %w", k8sNamespace, err)
 	}
 
 	if list != nil {
@@ -636,31 +637,31 @@ func (m *MsiOperator) applyMsiToK8sObject(msi *msi.Identity, k8sResource *unstru
 	// main
 	resourceApiVersion := fmt.Sprintf("%s/%s", K8sSchemeAzureIdentityBindingGroup, K8sSchemeAzureIdentityBindingVersion)
 	if err := unstructured.SetNestedField(k8sResource.Object, resourceApiVersion, "apiVersion"); err != nil {
-		return fmt.Errorf("failed to set object apiversion value: %v", err)
+		return fmt.Errorf("failed to set object apiversion value: %w", err)
 	}
 
 	if err := unstructured.SetNestedField(k8sResource.Object, K8sSchemeAzureIdentityResourceSingular, "kind"); err != nil {
-		return fmt.Errorf("failed to set object kind value: %v", err)
+		return fmt.Errorf("failed to set object kind value: %w", err)
 	}
 
 	// settings
 	msiType := int64(0)
 	if err := unstructured.SetNestedField(k8sResource.Object, msiType, "spec", "type"); err != nil {
-		return fmt.Errorf("failed to set spec.type value: %v", err)
+		return fmt.Errorf("failed to set spec.type value: %w", err)
 	}
 
 	if err := unstructured.SetNestedField(k8sResource.Object, msiResourceId, "spec", "resourceID"); err != nil {
-		return fmt.Errorf("failed to set spec.resourceID value: %v", err)
+		return fmt.Errorf("failed to set spec.resourceID value: %w", err)
 	}
 
 	if err := unstructured.SetNestedField(k8sResource.Object, msiClientId, "spec", "clientID"); err != nil {
-		return fmt.Errorf("failed to set spec.clientID value: %v", err)
+		return fmt.Errorf("failed to set spec.clientID value: %w", err)
 	}
 
 	// annotations
 	if m.Conf.AzureIdentity.Namespaced {
 		if err := unstructured.SetNestedField(k8sResource.Object, "namespaced", "metadata", "annotations", "aadpodidentity.k8s.io/Behavior"); err != nil {
-			return fmt.Errorf("failed to set metadata.annotations[aadpodidentity.k8s.io/Behavior] value: %v", err)
+			return fmt.Errorf("failed to set metadata.annotations[aadpodidentity.k8s.io/Behavior] value: %w", err)
 		}
 	} else {
 		unstructured.RemoveNestedField(k8sResource.Object, "metadata", "annotations", "aadpodidentity.k8s.io/Behavior")
@@ -670,24 +671,24 @@ func (m *MsiOperator) applyMsiToK8sObject(msi *msi.Identity, k8sResource *unstru
 	if m.Conf.AzureIdentity.Expiry.Enable {
 		expiryDate := time.Now().UTC().Add(m.Conf.AzureIdentity.Expiry.Duration).Format(m.Conf.AzureIdentity.Expiry.TimeFormat)
 		if err := unstructured.SetNestedField(k8sResource.Object, expiryDate, "metadata", "annotations", m.Conf.AzureIdentity.Expiry.Annotation); err != nil {
-			return fmt.Errorf("failed to set metadata.annotations[aadpodidentity.k8s.io/Behavior] value: %v", err)
+			return fmt.Errorf("failed to set metadata.annotations[aadpodidentity.k8s.io/Behavior] value: %w", err)
 		}
 	}
 
 	// labels
 	labelName := m.labelName("subscription")
 	if err := unstructured.SetNestedField(k8sResource.Object, resourceInfo.SubscriptionID, "metadata", "labels", labelName); err != nil {
-		return fmt.Errorf("failed to set metadata.labels[%v] value: %v", labelName, err)
+		return fmt.Errorf("failed to set metadata.labels[%v] value: %w", labelName, err)
 	}
 
 	labelName = m.labelName("resourcegroup")
 	if err := unstructured.SetNestedField(k8sResource.Object, resourceInfo.ResourceGroup, "metadata", "labels", labelName); err != nil {
-		return fmt.Errorf("failed to set metadata.labels[%v] value: %v", labelName, err)
+		return fmt.Errorf("failed to set metadata.labels[%v] value: %w", labelName, err)
 	}
 
 	labelName = m.labelName("name")
 	if err := unstructured.SetNestedField(k8sResource.Object, resourceInfo.ResourceName, "metadata", "labels", labelName); err != nil {
-		return fmt.Errorf("failed to set metadata.labels[%v] value: %v", labelName, err)
+		return fmt.Errorf("failed to set metadata.labels[%v] value: %w", labelName, err)
 	}
 
 	return nil

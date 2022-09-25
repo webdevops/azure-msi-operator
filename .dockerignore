@@ -1,3 +1,4 @@
 /vendor/
 /azure-msi-operator
 *.exe
+/release-assets

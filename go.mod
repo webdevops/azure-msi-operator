@@ -65,11 +65,11 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	golang.org/x/crypto v0.0.0-20220924013350-4ba4fb4dd9e7 // indirect
-	golang.org/x/net v0.0.0-20220923203811-8be639271d50 // indirect
+	golang.org/x/net v0.7.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20220909003341-f21342109be1 // indirect
-	golang.org/x/sys v0.0.0-20220919091848-fb04ddd9f9c8 // indirect
-	golang.org/x/term v0.0.0-20220919170432-7a66f970e087 // indirect
-	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/sys v0.5.0 // indirect
+	golang.org/x/term v0.5.0 // indirect
+	golang.org/x/text v0.7.0 // indirect
 	golang.org/x/time v0.0.0-20220922220347-f3bd1da661af // indirect
 	google.golang.org/api v0.97.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect

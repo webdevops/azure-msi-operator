@@ -17,7 +17,7 @@ import (
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/operator-framework/operator-lib/leader"
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -53,8 +53,10 @@ const (
 
 type (
 	MsiOperator struct {
-		Conf       config.Opts
-		UserAgent  string
+		Conf      config.Opts
+		UserAgent string
+		Logger    *zap.SugaredLogger
+
 		ctx        context.Context
 		runLock    *semaphore.Weighted
 		upsertLock *semaphore.Weighted
@@ -102,13 +104,13 @@ func (m *MsiOperator) Init() {
 	if t, err := template.New("msiResourceName").Parse(m.Conf.AzureIdentity.TemplateResourceName); err == nil {
 		m.msi.resourceNameTemplate = t
 	} else {
-		log.Panic(err)
+		m.Logger.Panic(err)
 	}
 
 	if t, err := template.New("msiNamespace").Parse(m.Conf.AzureIdentity.TemplateNamespace); err == nil {
 		m.msi.namespaceTemplate = t
 	} else {
-		log.Panic(err)
+		m.Logger.Panic(err)
 	}
 }
 
@@ -118,13 +120,13 @@ func (m *MsiOperator) initAzure() {
 	// setup azure authorizer
 	m.azure.authorizer, err = auth.NewAuthorizerFromEnvironment()
 	if err != nil {
-		log.Panic(err)
+		m.Logger.Panic(err)
 	}
 
 	// try to get cloud name, defaults to public cloud name
 	m.azure.environment, err = azure.EnvironmentFromName(m.Conf.Azure.Environment)
 	if err != nil {
-		log.Panic(err)
+		m.Logger.Panic(err)
 	}
 
 	subscriptionsClient := subscriptions.NewClientWithBaseURI(m.azure.environment.ResourceManagerEndpoint)
@@ -134,12 +136,12 @@ func (m *MsiOperator) initAzure() {
 		// auto lookup subscriptions
 		listResult, err := subscriptionsClient.List(m.ctx)
 		if err != nil {
-			log.Panic(err)
+			m.Logger.Panic(err)
 		}
 		m.azure.subscriptionList = listResult.Values()
 
 		if len(m.azure.subscriptionList) == 0 {
-			log.Panic("no Azure Subscriptions found via auto detection or ServicePrincipal doesn't have permission to read subscriptions")
+			m.Logger.Panic("no Azure Subscriptions found via auto detection or ServicePrincipal doesn't have permission to read subscriptions")
 		}
 	} else {
 		// fixed subscription list
@@ -147,7 +149,7 @@ func (m *MsiOperator) initAzure() {
 		for _, subId := range m.Conf.Azure.Subscription {
 			result, err := subscriptionsClient.Get(m.ctx, subId)
 			if err != nil {
-				log.Panic(err)
+				m.Logger.Panic(err)
 			}
 			m.azure.subscriptionList = append(m.azure.subscriptionList, result)
 		}
@@ -158,13 +160,13 @@ func (m *MsiOperator) initKubernetes() {
 	// get kubeconfig
 	kubeconf, err := clientcmd.BuildConfigFromFlags("", m.Conf.Kubernetes.Config)
 	if err != nil {
-		log.Panic(err)
+		m.Logger.Panic(err)
 	}
 
 	// create kubernetes client
 	client, err := dynamic.NewForConfig(kubeconf)
 	if err != nil {
-		log.Panic(err)
+		m.Logger.Panic(err)
 	}
 
 	m.kubernetes.client = client
@@ -224,21 +226,21 @@ func (m *MsiOperator) Start(syncInterval time.Duration) {
 
 func (m *MsiOperator) leaderElect() {
 	if m.Conf.Lease.Enabled {
-		log.Info("trying to become leader")
+		m.Logger.Info("trying to become leader")
 		if m.Conf.Instance.Pod != nil && os.Getenv("POD_NAME") == "" {
 			err := os.Setenv("POD_NAME", *m.Conf.Instance.Pod)
 			if err != nil {
-				log.Panic(err)
+				m.Logger.Panic(err)
 			}
 		}
 
 		time.Sleep(15 * time.Second)
 		err := leader.Become(m.ctx, m.Conf.Lease.Name)
 		if err != nil {
-			log.Error(err, "Failed to retry for leader lock")
+			m.Logger.Error(err, "Failed to retry for leader lock")
 			os.Exit(1)
 		}
-		log.Info("aquired leader lock, continue")
+		m.Logger.Info("aquired leader lock, continue")
 	}
 }
 
@@ -258,7 +260,7 @@ func (m *MsiOperator) startWatchSync() {
 			gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "namespaces"}
 			watch, err := m.kubernetes.client.Resource(gvr).Watch(m.ctx, metav1.ListOptions{Watch: true})
 			if err != nil {
-				log.Panic(err)
+				m.Logger.Panic(err)
 			}
 
 		watchLoop:
@@ -275,7 +277,7 @@ func (m *MsiOperator) startWatchSync() {
 				}
 			}
 
-			log.Info("restarting Namespace watch")
+			m.Logger.Info("restarting Namespace watch")
 		}
 	}()
 
@@ -285,7 +287,7 @@ func (m *MsiOperator) startWatchSync() {
 			gvr := schema.GroupVersionResource{Group: K8sSchemeAzureIdentityBindingGroup, Version: K8sSchemeAzureIdentityBindingVersion, Resource: K8sSchemeAzureIdentityBindingResourcePlural}
 			watch, err := m.kubernetes.client.Resource(gvr).Watch(m.ctx, metav1.ListOptions{Watch: true})
 			if err != nil {
-				log.Panic(err)
+				m.Logger.Panic(err)
 			}
 
 		watchLoop:
@@ -302,7 +304,7 @@ func (m *MsiOperator) startWatchSync() {
 				}
 			}
 
-			log.Info("restarting AzureIdentityBinding watch")
+			m.Logger.Info("restarting AzureIdentityBinding watch")
 		}
 	}()
 }
@@ -314,18 +316,18 @@ func (m *MsiOperator) run() {
 	}
 	defer m.runLock.Release(1)
 
-	log.Info("starting ServiceDiscovery")
+	m.Logger.Info("starting ServiceDiscovery")
 	overallStartTime := time.Now()
 
 	if err := m.updateAzureMsiList(); err != nil {
-		log.Errorf("failed to update Azure MSI list: %v", err)
+		m.Logger.Errorf("failed to update Azure MSI list: %v", err)
 		return
 	}
 
 	m.upsert("", true, true)
 
 	overallDuration := time.Since(overallStartTime)
-	log.Infof("finished after %s", overallDuration.String())
+	m.Logger.Infof("finished after %s", overallDuration.String())
 }
 
 func (m *MsiOperator) updateAzureMsiList() error {
@@ -335,7 +337,7 @@ func (m *MsiOperator) updateAzureMsiList() error {
 
 		subscriptionStartTime := time.Now()
 
-		contextLogger := log.WithField("subscription", *subscription.DisplayName)
+		contextLogger := m.Logger.With(zap.String("subscription", *subscription.DisplayName))
 
 		contextLogger.Infof("running MSI servicediscovery in Azure Subscription \"%s\" (%s)", to.String(subscription.DisplayName), to.String(subscription.SubscriptionID))
 		resourceList, err := m.fetchAzureMsiList(&subscription)
@@ -377,18 +379,16 @@ func (m *MsiOperator) upsert(namespaceFilter string, syncAzureIdentity, syncAzur
 	}()
 
 	if namespaceFilter == "" {
-		log.Info("starting upsert for cluster")
+		m.Logger.Info("starting upsert for cluster")
 	} else {
-		log.Infof("starting upsert for namespace %v", namespaceFilter)
+		m.Logger.Infof("starting upsert for namespace %v", namespaceFilter)
 	}
 
 	for _, msiResource := range m.serviceDiscovery.msi.GetList() {
 		resourceId := to.String(msiResource.AzureResourceId)
 
 		// add resource to log
-		msiLogger := log.WithFields(log.Fields{
-			"resource": resourceId,
-		})
+		msiLogger := m.Logger.With(zap.String("resource", resourceId))
 
 		// check if namespace/resource was found
 		if msiResource.KubernetesNamespace == nil {
@@ -408,10 +408,10 @@ func (m *MsiOperator) upsert(namespaceFilter string, syncAzureIdentity, syncAzur
 			}
 
 			// add k8s info to log
-			msiLogger = msiLogger.WithFields(log.Fields{
-				"k8sNamespace": k8sNamespace,
-				"k8sResource":  *msiResource.KubernetesResourceName,
-			})
+			msiLogger = msiLogger.With(
+				zap.String("k8sNamespace", k8sNamespace),
+				zap.String("k8sResource", *msiResource.KubernetesResourceName),
+			)
 
 			// sync AzureIdentity
 			if syncAzureIdentity {
@@ -435,7 +435,7 @@ func (m *MsiOperator) upsert(namespaceFilter string, syncAzureIdentity, syncAzur
 	return true
 }
 
-func (m *MsiOperator) syncAzureIdentity(contextLogger *log.Entry, msiResource MsiResourceInfo, k8sNamespace string) error {
+func (m *MsiOperator) syncAzureIdentity(contextLogger *zap.SugaredLogger, msiResource MsiResourceInfo, k8sNamespace string) error {
 	gvr := schema.GroupVersionResource{Group: K8sSchemeAzureIdentityGroup, Version: K8sSchemeAzureIdentityVersion, Resource: K8sSchemeAzureIdentityResourcePlural}
 	subscriptionId := to.String(msiResource.AzureSubscriptionId)
 	k8sResourceName := *msiResource.KubernetesResourceName
@@ -489,7 +489,7 @@ func (m *MsiOperator) syncAzureIdentity(contextLogger *log.Entry, msiResource Ms
 	return nil
 }
 
-func (m *MsiOperator) syncAzureIdentityToAzureIdentityBinding(contextLogger *log.Entry, msiInfo MsiResourceInfo, k8sNamespace string) error {
+func (m *MsiOperator) syncAzureIdentityToAzureIdentityBinding(contextLogger *zap.SugaredLogger, msiInfo MsiResourceInfo, k8sNamespace string) error {
 	gvr := schema.GroupVersionResource{Group: K8sSchemeAzureIdentityBindingGroup, Version: K8sSchemeAzureIdentityBindingVersion, Resource: K8sSchemeAzureIdentityBindingResourcePlural}
 
 	labelNameSubscription := m.labelName("subscription")
@@ -591,7 +591,7 @@ func (m *MsiOperator) generateMsiKubernetesResourceInfo(msi *msi.Identity) (msiI
 
 	resNameBuf := &bytes.Buffer{}
 	if err := m.msi.resourceNameTemplate.Execute(resNameBuf, templateData); err != nil {
-		log.Panic(err)
+		m.Logger.Panic(err)
 	}
 	if val := resNameBuf.String(); val != "" {
 		msiInfo.KubernetesResourceName = &val
@@ -599,7 +599,7 @@ func (m *MsiOperator) generateMsiKubernetesResourceInfo(msi *msi.Identity) (msiI
 
 	namespaceBuf := &bytes.Buffer{}
 	if err := m.msi.namespaceTemplate.Execute(namespaceBuf, templateData); err != nil {
-		log.Panic(err)
+		m.Logger.Panic(err)
 	}
 	if val := namespaceBuf.String(); val != "" {
 		for _, namespace := range strings.Split(val, ",") {
@@ -722,7 +722,7 @@ func (m *MsiOperator) labelName(name string) string {
 func (m *MsiOperator) decorateAzureClient(client *autorest.Client) {
 	client.Authorizer = m.azure.authorizer
 	if err := client.AddToUserAgent(m.UserAgent); err != nil {
-		log.Panic(err)
+		m.Logger.Panic(err)
 	}
 
 	azuretracing.DecorateAzureAutoRestClient(client)
